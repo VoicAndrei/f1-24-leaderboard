@@ -183,6 +183,19 @@ def add_lap_time(rig_identifier, track_name, player_name, lap_time_ms):
             logger.error(f"Rig not found: {rig_identifier}")
             return False
         
+        # Check if the exact same lap time already exists for this player on this track
+        cursor = conn.execute(
+            """
+            SELECT COUNT(*) FROM lap_times 
+            WHERE track_id = ? AND player_name_on_lap = ? AND lap_time_ms = ?
+            """,
+            (track_id, player_name, lap_time_ms)
+        )
+        result = cursor.fetchone()
+        if result and result[0] > 0:
+            logger.info(f"Duplicate lap time detected: {player_name} - {track_name} - {lap_time_ms}ms, skipping")
+            return True  # Return True to indicate "success" since we're intentionally skipping
+        
         # Insert the lap time
         conn.execute(
             """
@@ -226,8 +239,20 @@ def get_top_lap_times(track_name, limit=10):
             logger.error(f"Track not found: {track_name}")
             return []
         
+        # Use a subquery to get only the best lap time for each player
         cursor = conn.execute(
             """
+            WITH BestLapTimes AS (
+                SELECT 
+                    player_name_on_lap,
+                    MIN(lap_time_ms) as best_time
+                FROM 
+                    lap_times
+                WHERE 
+                    track_id = ?
+                GROUP BY 
+                    player_name_on_lap
+            )
             SELECT 
                 lap_times.id,
                 lap_times.player_name_on_lap,
@@ -238,13 +263,16 @@ def get_top_lap_times(track_name, limit=10):
                 lap_times
             JOIN 
                 rigs ON lap_times.rig_id = rigs.id
+            JOIN
+                BestLapTimes ON lap_times.player_name_on_lap = BestLapTimes.player_name_on_lap 
+                            AND lap_times.lap_time_ms = BestLapTimes.best_time
             WHERE 
                 lap_times.track_id = ?
             ORDER BY 
                 lap_times.lap_time_ms ASC
             LIMIT ?
             """,
-            (track_id, limit)
+            (track_id, track_id, limit)
         )
         
         results = []

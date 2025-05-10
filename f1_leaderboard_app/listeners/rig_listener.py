@@ -96,6 +96,10 @@ class RigTelemetryListener:
         self.connection_error_count = 0
         self.max_connection_errors = 10
         
+        # Track submitted lap times to avoid duplicates
+        # Format: {(track_name, lap_time_ms): timestamp}
+        self.submitted_lap_times = {}
+        
         logger.info(f"Rig ID: {self.rig_id}")
         logger.info(f"API endpoint: {self.lap_submission_url}")
         logger.info(f"UDP port: {self.udp_port}")
@@ -113,6 +117,8 @@ class RigTelemetryListener:
             self.session = Session()
             self.last_lap_times = [0] * 22  # Store previous lap times to detect changes
             self.connection_error_count = 0
+            
+            # Note: We don't reset submitted_lap_times here to prevent duplicates after reconnect
             
             return True
         except ImportError as e:
@@ -132,9 +138,13 @@ class RigTelemetryListener:
             # Try to close existing listener if there is one
             if self.listener:
                 try:
+                    logger.info("Closing existing listener...")
                     self.listener.close()
-                except:
-                    pass
+                    self.listener = None
+                    # Sleep briefly to allow the socket to be released
+                    time.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"Error closing existing listener: {e}")
             
             # Import telemetry listener
             try:
@@ -146,7 +156,19 @@ class RigTelemetryListener:
             except OSError as e:
                 logger.error(f"Network error when creating UDP listener: {e}")
                 logger.error("Another application may be using this port or there might be network configuration issues.")
-                return False
+                
+                # If the socket is already in use, we might need to wait longer for it to be released
+                if "[WinError 10048]" in str(e):
+                    logger.info("Socket in use, waiting 5 seconds before trying again...")
+                    time.sleep(5)
+                    try:
+                        self.listener = Listener(port=self.udp_port)
+                        logger.info("Successfully created listener after waiting.")
+                    except Exception as e2:
+                        logger.error(f"Still unable to create listener: {e2}")
+                        return False
+                else:
+                    return False
             
             # Test API connection
             try:
@@ -253,6 +275,14 @@ class RigTelemetryListener:
         Returns:
             bool: True if successful, False otherwise
         """
+        # Check if this exact lap time was already submitted for this track
+        lap_key = (track_name, lap_time_ms)
+        if lap_key in self.submitted_lap_times:
+            time_ago = time.time() - self.submitted_lap_times[lap_key]
+            logger.info(f"Ignoring duplicate lap time for {track_name} ({self.format_lap_time(lap_time_ms)}), " 
+                        f"already submitted {time_ago:.1f} seconds ago")
+            return True
+            
         payload = {
             "rig_identifier": self.rig_id,
             "track_name": track_name,
@@ -271,6 +301,10 @@ class RigTelemetryListener:
                     result = response.json()
                     logger.info(f"Lap time submitted successfully: {result.get('message')}")
                     self.connection_error_count = 0  # Reset error counter on success
+                    
+                    # Record this lap time as submitted with current timestamp
+                    self.submitted_lap_times[lap_key] = time.time()
+                    
                     return True
                 elif response.status_code >= 500:
                     # Server error, might be temporary
@@ -374,6 +408,16 @@ class RigTelemetryListener:
             for player in self.players:
                 player.bestLapTime = 0
                 player.lastLapTime = 0
+                
+            # Clear submitted lap times for the new track to prevent issues with the 
+            # same lap time being considered a duplicate after track change
+            new_submitted_lap_times = {}
+            for (track, lap_time), timestamp in self.submitted_lap_times.items():
+                if track != new_track:
+                    new_submitted_lap_times[(track, lap_time)] = timestamp
+            self.submitted_lap_times = new_submitted_lap_times
+            
+            logger.info(f"Reset lap times and lap submission history for track: {new_track}")
     
     def run(self):
         """Main loop to capture and process telemetry data."""
@@ -391,6 +435,8 @@ class RigTelemetryListener:
         reconnect_wait = 5  # seconds
         max_consecutive_errors = 10
         max_idle_time = 30  # seconds without data before reconnect
+        last_reinit_attempt = 0  # timestamp of last reinitialization attempt
+        min_reinit_interval = 60  # minimum seconds between reinitialization attempts
         
         try:
             while self.running:
@@ -415,14 +461,35 @@ class RigTelemetryListener:
                     
                     # Check for idle time (no data received)
                     elif time.time() - last_data_time > max_idle_time:
-                        logger.warning(f"No data received for {max_idle_time} seconds. F1 game might not be running.")
-                        logger.info("Reinitializing listener...")
-                        if self.initialize():
-                            logger.info("Listener reinitialized successfully.")
-                            last_data_time = time.time()  # Reset timer
+                        current_time = time.time()
+                        # Only attempt reinitialization if enough time has passed since the last attempt
+                        if current_time - last_reinit_attempt >= min_reinit_interval:
+                            logger.warning(f"No data received for {max_idle_time} seconds. F1 game might not be running.")
+                            logger.info("Reinitializing listener...")
+                            
+                            # Make sure to properly close the listener first
+                            if self.listener:
+                                try:
+                                    self.listener.close()
+                                    self.listener = None
+                                    # Wait for the socket to be released
+                                    time.sleep(1)
+                                except Exception as e:
+                                    logger.error(f"Error closing listener: {e}")
+                            
+                            if self.initialize():
+                                logger.info("Listener reinitialized successfully.")
+                                last_data_time = time.time()  # Reset timer
+                            else:
+                                logger.error("Failed to reinitialize listener.")
+                                time.sleep(reconnect_wait)
+                            
+                            last_reinit_attempt = current_time
                         else:
-                            logger.error("Failed to reinitialize listener.")
-                            time.sleep(reconnect_wait)
+                            # Don't spam the logs, only log the wait once every 30 seconds
+                            if int(current_time) % 30 == 0:
+                                wait_time = min_reinit_interval - (current_time - last_reinit_attempt)
+                                logger.info(f"Waiting {wait_time:.1f} seconds before attempting reinitialization again.")
                     
                     # Small sleep to prevent high CPU usage
                     time.sleep(0.001)
@@ -431,27 +498,44 @@ class RigTelemetryListener:
                     consecutive_errors += 1
                     logger.error(f"Network error: {e}")
                     
-                    if consecutive_errors >= max_consecutive_errors:
+                    current_time = time.time()
+                    if consecutive_errors >= max_consecutive_errors and current_time - last_reinit_attempt >= min_reinit_interval:
                         logger.warning(f"Too many consecutive errors ({consecutive_errors}). Reinitializing listener...")
+                        
+                        # Make sure to properly close the listener first
+                        if self.listener:
+                            try:
+                                self.listener.close()
+                                self.listener = None
+                                time.sleep(1)
+                            except Exception as e2:
+                                logger.error(f"Error closing listener: {e2}")
+                        
                         if self.initialize():
                             logger.info("Listener reinitialized successfully.")
                             consecutive_errors = 0
                         else:
                             logger.error("Failed to reinitialize listener.")
+                        
                         time.sleep(reconnect_wait)
+                        last_reinit_attempt = current_time
                 
                 except Exception as e:
                     consecutive_errors += 1
                     logger.error(f"Error processing telemetry data: {e}")
                     
-                    if consecutive_errors >= max_consecutive_errors:
+                    current_time = time.time()
+                    if consecutive_errors >= max_consecutive_errors and current_time - last_reinit_attempt >= min_reinit_interval:
                         logger.warning(f"Too many consecutive errors ({consecutive_errors}). Reinitializing listener...")
+                        
                         if self.initialize():
                             logger.info("Listener reinitialized successfully.")
                             consecutive_errors = 0
                         else:
                             logger.error("Failed to reinitialize listener.")
+                        
                         time.sleep(reconnect_wait)
+                        last_reinit_attempt = current_time
                 
         except KeyboardInterrupt:
             logger.info("Telemetry listener stopped by user.")
@@ -459,12 +543,13 @@ class RigTelemetryListener:
             logger.error(f"Fatal error in telemetry listener: {e}")
         finally:
             # Clean up
+            self.running = False
             if self.listener:
                 try:
                     self.listener.close()
                     logger.info("UDP listener closed.")
-                except:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error closing listener: {e}")
         
         return True
 
