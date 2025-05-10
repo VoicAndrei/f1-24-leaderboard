@@ -1,2 +1,22 @@
-# Python package dependencies will be added here as they are identified
+# Python package dependencies
+
+# Core dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.23.2
+pydantic==2.4.2
+sqlalchemy==2.0.22
+aiohttp==3.8.6
+
+# Frontend-related
+jinja2==3.1.2
+python-multipart==0.0.6
+
+# Development and testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+
 # Initial list of expected dependencies (to be confirmed): 

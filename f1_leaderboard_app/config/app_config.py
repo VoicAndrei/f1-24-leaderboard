@@ -58,8 +58,8 @@ TRACK_ID_MAPPING = {
     "Yas Marina Circuit": 14                   # abu_dhabi
 }
 
-# Path to the telemetry repository
-TELEMETRY_REPO_PATH = "/c:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application"
+# Path to the telemetry repository - fixed for Windows
+TELEMETRY_REPO_PATH = "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application"
 
 # Database URL
 DATABASE_URL = "backend/database/f1_leaderboard.db"
