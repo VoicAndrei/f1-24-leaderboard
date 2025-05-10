@@ -9,7 +9,8 @@ It exposes API endpoints for submitting lap times and retrieving leaderboard dat
 import os
 import sys
 import logging
-from typing import List, Optional
+import time
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Path, Request
@@ -24,7 +25,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(root_dir)
 
 # Import app configuration and database manager
-from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS
+from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS
 from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
@@ -37,6 +38,12 @@ from backend.database.db_manager import (
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Leaderboard display state management
+current_track_index = 0
+auto_cycle_enabled = True
+last_cycle_time = time.time()
+manual_track_selection = None
 
 # Define Pydantic models for request and response data
 class LapTimeSubmit(BaseModel):
@@ -79,6 +86,12 @@ class AssignPlayerRequest(BaseModel):
     rig_identifier: str = Field(..., description="Unique identifier for the simulator rig (e.g., 'RIG1')")
     player_name: str = Field(..., description="Name of the player to assign to the rig")
 
+class TrackSelectRequest(BaseModel):
+    """
+    Model for track selection request.
+    """
+    track_name: str = Field(..., description="Name of the track to display on the leaderboard")
+
 # Create FastAPI application
 app = FastAPI(
     title="F1 Leaderboard API",
@@ -100,6 +113,32 @@ app.mount("/static", StaticFiles(directory="backend/static"), name="static")
 
 # Set up templates
 templates = Jinja2Templates(directory="backend/templates")
+
+def get_current_leaderboard_track() -> str:
+    """
+    Determine the current track to display on the leaderboard.
+    
+    This function handles auto-cycling between tracks at regular intervals
+    or returns a manually selected track if one is set.
+    
+    Returns:
+        str: The name of the track to display
+    """
+    global current_track_index, last_cycle_time, manual_track_selection
+    
+    # If a track has been manually selected, return it
+    if manual_track_selection:
+        return manual_track_selection
+    
+    # Check if it's time to cycle to the next track
+    if auto_cycle_enabled and time.time() - last_cycle_time >= AUTO_CYCLE_INTERVAL_SECONDS:
+        # Advance to the next track
+        current_track_index = (current_track_index + 1) % len(F1_2024_TRACKS)
+        last_cycle_time = time.time()
+        logger.info(f"Auto-cycling to track: {F1_2024_TRACKS[current_track_index]}")
+    
+    # Return the current track
+    return F1_2024_TRACKS[current_track_index]
 
 @app.get("/", response_class=HTMLResponse, tags=["UI"])
 async def root(request: Request):
@@ -189,6 +228,35 @@ async def get_leaderboard(
         logger.error(f"Error retrieving leaderboard: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/display/current_leaderboard_data", tags=["Display"])
+async def get_current_leaderboard_data():
+    """
+    Get the current leaderboard data to display.
+    
+    This endpoint handles the logic for determining which track's leaderboard to show,
+    including auto-cycling through tracks and manual track selection.
+    
+    Returns:
+        dict: Current track name, leaderboard data, and auto-cycle status
+    """
+    try:
+        # Get the current track to display
+        track_name = get_current_leaderboard_track()
+        
+        # Get the leaderboard data for the track
+        leaderboard_data = get_top_lap_times(track_name)
+        
+        # Return the current display data
+        return {
+            "track_name": track_name,
+            "leaderboard": leaderboard_data,
+            "auto_cycle_enabled": auto_cycle_enabled
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting current leaderboard data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/tracks", response_model=List[TrackInfo], tags=["Tracks"])
 async def get_tracks():
     """
@@ -251,6 +319,101 @@ async def admin_assign_player(assignment: AssignPlayerRequest):
     
     except Exception as e:
         logger.error(f"Error assigning player to rig: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/track/select", tags=["Admin"])
+async def select_track(track_request: TrackSelectRequest):
+    """
+    Manually select a track to display on the leaderboard.
+    
+    Args:
+        track_request: Track selection request data
+        
+    Returns:
+        dict: Success message or error
+    """
+    global current_track_index, manual_track_selection
+    
+    try:
+        # Validate the track name
+        if track_request.track_name not in F1_2024_TRACKS:
+            raise HTTPException(status_code=400, detail=f"Invalid track name: {track_request.track_name}")
+        
+        # Set the manual track selection
+        manual_track_selection = track_request.track_name
+        
+        # Update the current track index to match
+        current_track_index = F1_2024_TRACKS.index(track_request.track_name)
+        
+        logger.info(f"Track manually selected: {track_request.track_name}")
+        
+        return {
+            "success": True,
+            "message": f"Track '{track_request.track_name}' selected for display",
+            "track_name": track_request.track_name
+        }
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error selecting track: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/track/toggle_autocycle", tags=["Admin"])
+async def toggle_autocycle():
+    """
+    Toggle the auto-cycle feature on or off.
+    
+    Returns:
+        dict: Current auto-cycle status
+    """
+    global auto_cycle_enabled, manual_track_selection, last_cycle_time
+    
+    try:
+        # Toggle the auto-cycle flag
+        auto_cycle_enabled = not auto_cycle_enabled
+        
+        if auto_cycle_enabled:
+            # If enabling auto-cycle, clear any manual track selection
+            manual_track_selection = None
+            # Reset the cycle timer
+            last_cycle_time = time.time()
+            
+            logger.info("Auto-cycle enabled")
+        else:
+            logger.info("Auto-cycle disabled")
+        
+        return {
+            "auto_cycle_enabled": auto_cycle_enabled
+        }
+    
+    except Exception as e:
+        logger.error(f"Error toggling auto-cycle: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/track/status", tags=["Admin"])
+async def get_track_status():
+    """
+    Get the current status of the leaderboard display.
+    
+    Returns:
+        dict: Current display status including track, selection mode, and auto-cycle status
+    """
+    try:
+        current_track = get_current_leaderboard_track()
+        
+        return {
+            "current_display_track": current_track,
+            "manual_selection_active": manual_track_selection is not None,
+            "manual_selection": manual_track_selection,
+            "auto_cycle_enabled": auto_cycle_enabled,
+            "current_track_index": current_track_index,
+            "time_until_next_cycle": max(0, AUTO_CYCLE_INTERVAL_SECONDS - (time.time() - last_cycle_time)) if auto_cycle_enabled and not manual_track_selection else None
+        }
+    
+    except Exception as e:
+        logger.error(f"Error getting track status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def format_lap_time(milliseconds):
