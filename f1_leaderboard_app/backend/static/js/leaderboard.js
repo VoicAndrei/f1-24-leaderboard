@@ -2,7 +2,7 @@
  * F1 Leaderboard JavaScript
  * 
  * This script fetches leaderboard data from the API and updates the HTML table.
- * It also handles auto-refresh to keep the data up-to-date.
+ * It handles dynamic track changes and auto-cycling.
  */
 
 // Format lap time from milliseconds to MM:SS.mmm
@@ -17,24 +17,28 @@ function formatLapTime(timeMs) {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
 }
 
-// Fetch leaderboard data from the API
-async function fetchLeaderboardData(trackName) {
+// Update the display with current leaderboard data
+async function updateDisplay() {
     try {
-        // Update track name in UI
-        const trackNameElement = document.getElementById('track-name');
-        trackNameElement.textContent = trackName;
-        
-        // Encode the track name for URL
-        const encodedTrackName = encodeURIComponent(trackName);
-        
-        // Fetch data from the API
-        const response = await fetch(`/api/leaderboard/${encodedTrackName}`);
+        // Fetch data from the current leaderboard endpoint
+        const response = await fetch('/api/display/current_leaderboard_data');
         
         if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
         }
         
-        const leaderboardData = await response.json();
+        const data = await response.json();
+        
+        // Update track name in UI
+        const trackNameElement = document.getElementById('track-name');
+        trackNameElement.textContent = data.track_name;
+        
+        // Update cycle status indicator if present
+        const cycleStatusIndicator = document.getElementById('cycle-status-indicator');
+        if (cycleStatusIndicator) {
+            cycleStatusIndicator.textContent = data.auto_cycle_enabled ? 'Auto-Cycling' : 'Manual Selection';
+            cycleStatusIndicator.className = data.auto_cycle_enabled ? 'cycling' : 'manual';
+        }
         
         // Get the table body element
         const leaderboardBody = document.getElementById('leaderboard-body');
@@ -42,8 +46,11 @@ async function fetchLeaderboardData(trackName) {
         // Clear existing rows
         leaderboardBody.innerHTML = '';
         
+        // Get the leaderboard data
+        const leaderboardData = data.leaderboard;
+        
         // Check if there's no data
-        if (leaderboardData.length === 0) {
+        if (!leaderboardData || leaderboardData.length === 0) {
             const noDataRow = document.createElement('tr');
             noDataRow.className = 'no-data';
             noDataRow.innerHTML = `
@@ -86,23 +93,9 @@ async function fetchLeaderboardData(trackName) {
 
 // Initialize the leaderboard when the DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Make sure INITIAL_TRACK is defined in the HTML (passed from the server)
-    if (typeof INITIAL_TRACK === 'undefined') {
-        console.error('Error: INITIAL_TRACK is not defined');
-        
-        // Fallback to a hardcoded track name if needed
-        const fallbackTrack = "Bahrain International Circuit";
-        fetchLeaderboardData(fallbackTrack);
-    } else {
-        // Remove quotes if they're in the string (from tojson filter)
-        const trackName = INITIAL_TRACK.replace(/^"|"$/g, '');
-        fetchLeaderboardData(trackName);
-    }
+    // Initial update
+    updateDisplay();
     
-    // Auto-refresh the leaderboard every 8 seconds
-    setInterval(() => {
-        // Use the current track name from the UI
-        const currentTrack = document.getElementById('track-name').textContent;
-        fetchLeaderboardData(currentTrack);
-    }, 8000);
+    // Auto-refresh the leaderboard every 5 seconds
+    setInterval(updateDisplay, 5000);
 }); 

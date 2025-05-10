@@ -145,14 +145,7 @@ async def root(request: Request):
     """
     Root endpoint that returns the leaderboard HTML page.
     """
-    # Pass the initial track name to the template
-    return templates.TemplateResponse(
-        "leaderboard.html", 
-        {
-            "request": request, 
-            "initial_track_name": F1_2024_TRACKS[0]
-        }
-    )
+    return templates.TemplateResponse("leaderboard.html", {"request": request})
 
 @app.get("/admin", response_class=HTMLResponse, tags=["UI"])
 async def admin(request: Request):

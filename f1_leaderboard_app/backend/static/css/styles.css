@@ -40,6 +40,27 @@ h1 {
     font-weight: bold;
 }
 
+/* Cycle Status Indicator */
+#cycle-status-indicator {
+    margin: 10px auto;
+    padding: 5px 15px;
+    border-radius: 20px;
+    display: inline-block;
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#cycle-status-indicator.cycling {
+    background-color: #00a336; /* Green for auto-cycling */
+    color: white;
+}
+
+#cycle-status-indicator.manual {
+    background-color: #0057b8; /* Blue for manual selection */
+    color: white;
+}
+
 /* Table Styles */
 table {
     width: 100%;
