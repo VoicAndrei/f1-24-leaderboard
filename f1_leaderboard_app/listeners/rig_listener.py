@@ -331,7 +331,7 @@ class RigTelemetryListener:
                     # Resolve track name for API submission
                     track_name, track_resolved = self.resolve_track_name(self.session.track)
                     
-                    # Print lap information
+                    # Print lap information for all cars (for debugging)
                     logger.info(
                         f"New Lap Completed - {car_type} (Index: {i})\n"
                         f"  Track: {track_name}\n"
@@ -346,11 +346,12 @@ class RigTelemetryListener:
                         formatted_best = self.format_lap_time(player.bestLapTime)
                         logger.info(f"  New Personal Best: {formatted_best}")
                     
-                    # Submit lap time to API (only if this is the player's car or if we want to submit AI car laps)
-                    # For the purpose of the application, we'll submit all lap times
-                    if track_resolved:
+                    # Only submit lap times for the player's car (index 0), ignoring AI cars
+                    if track_resolved and i == player_car_index:
                         logger.info(f"Submitting lap time to API: {track_name} - {formatted_time}")
                         self.submit_lap_time(track_name, last_lap_time)
+                    elif i != player_car_index:
+                        logger.debug(f"Ignoring AI car lap time (Index: {i})")
     
     def process_session_data(self, packet):
         """Process session data packet to update track information.
