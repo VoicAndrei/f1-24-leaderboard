@@ -62,6 +62,13 @@
             display: none;
         }
         
+        #track-control-message {
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+        
         .success {
             background-color: rgba(39, 174, 96, 0.2);
             color: #2ecc71;
@@ -75,6 +82,30 @@
             border: 1px solid #c0392b;
             display: block !important;
         }
+        
+        .status-info {
+            margin: 1rem 0;
+            padding: 1rem;
+            background-color: #333;
+            border-radius: 4px;
+        }
+        
+        .status-item {
+            margin-bottom: 0.5rem;
+        }
+        
+        .status-item span {
+            font-weight: bold;
+            color: #e10600;
+        }
+        
+        .status-enabled {
+            color: #2ecc71 !important;
+        }
+        
+        .status-disabled {
+            color: #e74c3c !important;
+        }
     </style>
 </head>
 <body>
@@ -87,6 +118,38 @@
         </header>
         
         <div class="admin-container">
+            <!-- New Leaderboard Display Control Section -->
+            <section class="admin-section">
+                <h2>Leaderboard Display Control</h2>
+                
+                <div class="status-info">
+                    <div class="status-item">
+                        Currently Displaying: <span id="current-display-track">Loading...</span>
+                    </div>
+                    <div class="status-item">
+                        Manual Selection: <span id="manual-selection-status">Loading...</span>
+                    </div>
+                    <div class="status-item">
+                        Auto-Cycle: <span id="auto-cycle-status">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="manual-track-select">Select Track to Display:</label>
+                    <select id="manual-track-select" required>
+                        <option value="" disabled selected>Select a track...</option>
+                        <!-- Track options will be inserted here by JavaScript -->
+                    </select>
+                    <button id="set-track-button">Set Display Track</button>
+                </div>
+                
+                <div class="form-group">
+                    <button id="toggle-autocycle-button">Toggle Auto-Cycle</button>
+                </div>
+                
+                <div id="track-control-message" class="admin-message"></div>
+            </section>
+            
             <section class="admin-section">
                 <h2>Rig Player Assignments</h2>
                 <div class="table-container">
@@ -135,6 +198,10 @@
         </footer>
     </div>
     
+    <script>
+        // Make F1 tracks available to JavaScript
+        const F1_TRACKS_LIST = {{ f1_tracks|tojson }};
+    </script>
     <script src="/static/js/admin.js"></script>
 </body>
 </html> 

@@ -152,7 +152,10 @@ async def admin(request: Request):
     """
     Admin endpoint that returns the admin panel HTML page.
     """
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse("admin.html", {
+        "request": request,
+        "f1_tracks": F1_2024_TRACKS
+    })
 
 @app.get("/api", tags=["Root"])
 async def api_root():
