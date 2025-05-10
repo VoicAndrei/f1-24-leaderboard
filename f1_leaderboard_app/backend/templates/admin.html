@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Leaderboard - Admin Panel</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <style>
+        /* Additional admin-specific styles */
+        .admin-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        
+        .admin-section {
+            background-color: #222;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        
+        select, input[type="text"] {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #444;
+            background-color: #333;
+            color: white;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+        
+        button {
+            background-color: #e10600;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #ff0700;
+        }
+        
+        #admin-message {
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .success {
+            background-color: rgba(39, 174, 96, 0.2);
+            color: #2ecc71;
+            border: 1px solid #27ae60;
+            display: block !important;
+        }
+        
+        .error {
+            background-color: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+            border: 1px solid #c0392b;
+            display: block !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>F1 Leaderboard Admin Panel</h1>
+            <nav>
+                <a href="/">View Leaderboard</a>
+            </nav>
+        </header>
+        
+        <div class="admin-container">
+            <section class="admin-section">
+                <h2>Rig Player Assignments</h2>
+                <div class="table-container">
+                    <table id="rigs-table">
+                        <thead>
+                            <tr>
+                                <th>Rig ID</th>
+                                <th>Player Name</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rigs-table-body">
+                            <!-- Rig assignments will be inserted here by JavaScript -->
+                            <tr>
+                                <td colspan="2">Loading rig assignments...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            
+            <section class="admin-section">
+                <h2>Assign Player to Rig</h2>
+                <form id="assign-player-form">
+                    <div class="form-group">
+                        <label for="rig-select">Select Rig:</label>
+                        <select id="rig-select" required>
+                            <option value="" disabled selected>Select a rig...</option>
+                            <!-- Rig options will be inserted here by JavaScript -->
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="player-name-input">Player Name:</label>
+                        <input type="text" id="player-name-input" placeholder="Enter player name" required>
+                    </div>
+                    
+                    <button type="submit">Assign Player</button>
+                </form>
+                
+                <div id="admin-message"></div>
+            </section>
+        </div>
+        
+        <footer>
+            <p>F1 Leaderboard Application &copy; 2025</p>
+        </footer>
+    </div>
+    
+    <script src="/static/js/admin.js"></script>
+</body>
+</html> 

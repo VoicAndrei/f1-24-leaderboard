@@ -29,7 +29,9 @@ from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
     get_rig_current_player,
-    get_all_tracks
+    get_all_tracks,
+    get_rig_assignments,
+    assign_player_to_rig
 )
 
 # Set up logging
@@ -61,6 +63,21 @@ class TrackInfo(BaseModel):
     """
     id: int
     name: str
+
+class RigAssignment(BaseModel):
+    """
+    Model for rig assignment data.
+    """
+    id: int
+    rig_identifier: str
+    current_player_name: str
+
+class AssignPlayerRequest(BaseModel):
+    """
+    Model for player assignment request.
+    """
+    rig_identifier: str = Field(..., description="Unique identifier for the simulator rig (e.g., 'RIG1')")
+    player_name: str = Field(..., description="Name of the player to assign to the rig")
 
 # Create FastAPI application
 app = FastAPI(
@@ -97,6 +114,13 @@ async def root(request: Request):
             "initial_track_name": F1_2024_TRACKS[0]
         }
     )
+
+@app.get("/admin", response_class=HTMLResponse, tags=["UI"])
+async def admin(request: Request):
+    """
+    Admin endpoint that returns the admin panel HTML page.
+    """
+    return templates.TemplateResponse("admin.html", {"request": request})
 
 @app.get("/api", tags=["Root"])
 async def api_root():
@@ -179,6 +203,54 @@ async def get_tracks():
     
     except Exception as e:
         logger.error(f"Error retrieving tracks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/rigs", response_model=List[RigAssignment], tags=["Admin"])
+async def get_rigs():
+    """
+    Get all simulator rigs and their current player assignments.
+    
+    Returns:
+        list: List of rig assignments
+    """
+    try:
+        rigs = get_rig_assignments()
+        return rigs
+    
+    except Exception as e:
+        logger.error(f"Error retrieving rig assignments: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/rigs/assign_player", tags=["Admin"])
+async def admin_assign_player(assignment: AssignPlayerRequest):
+    """
+    Assign a player to a simulator rig.
+    
+    Args:
+        assignment: Player assignment request data
+        
+    Returns:
+        dict: Success message or error
+    """
+    try:
+        success = assign_player_to_rig(
+            assignment.rig_identifier,
+            assignment.player_name
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Rig not found: {assignment.rig_identifier}")
+        
+        return {
+            "success": True,
+            "message": f"Player '{assignment.player_name}' assigned to rig '{assignment.rig_identifier}'"
+        }
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error assigning player to rig: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def format_lap_time(milliseconds):
