@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Leaderboard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Leaderboard: <span id="track-name">Loading...</span></h1>
+        </header>
+        
+        <main>
+            <table id="leaderboard-table">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Player Name</th>
+                        <th>Lap Time</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-body">
+                    <!-- Leaderboard data will be inserted here by JavaScript -->
+                </tbody>
+            </table>
+        </main>
+        
+        <footer>
+            <p>F1 Leaderboard Application &copy; 2025</p>
+        </footer>
+    </div>
+
+    <script>
+        // Pass the initial track name from the backend to JavaScript
+        const INITIAL_TRACK = "{{ initial_track_name|tojson }}";
+    </script>
+    <script src="/static/js/leaderboard.js"></script>
+</body>
+</html> 

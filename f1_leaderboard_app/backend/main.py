@@ -12,8 +12,11 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query, Path
+from fastapi import FastAPI, HTTPException, Query, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 # Add the project root to the Python path
@@ -21,7 +24,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(root_dir)
 
 # Import app configuration and database manager
-from config.app_config import API_HOST, API_PORT
+from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS
 from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
@@ -75,10 +78,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/", tags=["Root"])
-async def root():
+# Mount static files
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+
+# Set up templates
+templates = Jinja2Templates(directory="backend/templates")
+
+@app.get("/", response_class=HTMLResponse, tags=["UI"])
+async def root(request: Request):
     """
-    Root endpoint that returns a welcome message.
+    Root endpoint that returns the leaderboard HTML page.
+    """
+    # Pass the initial track name to the template
+    return templates.TemplateResponse(
+        "leaderboard.html", 
+        {
+            "request": request, 
+            "initial_track_name": F1_2024_TRACKS[0]
+        }
+    )
+
+@app.get("/api", tags=["Root"])
+async def api_root():
+    """
+    API root endpoint that returns a welcome message.
     """
     return {"message": "Welcome to the F1 Leaderboard API"}
 

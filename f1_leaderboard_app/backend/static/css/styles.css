@@ -1,0 +1,112 @@
+/**
+ * F1 Leaderboard Styles
+ */
+
+/* Global Styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: 'Arial', sans-serif;
+}
+
+body {
+    background-color: #141414;
+    color: #ffffff;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Header Styles */
+header {
+    text-align: center;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e10600; /* F1 red */
+    padding-bottom: 15px;
+}
+
+h1 {
+    font-size: 2.5rem;
+    color: #ffffff;
+}
+
+#track-name {
+    color: #e10600; /* F1 red */
+    font-weight: bold;
+}
+
+/* Table Styles */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 30px;
+    background-color: #222222;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+th, td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid #444;
+}
+
+th {
+    background-color: #e10600; /* F1 red */
+    color: white;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+tr:hover {
+    background-color: #333333;
+}
+
+/* Highlight for the first place */
+tr.first-place {
+    background-color: rgba(225, 6, 0, 0.2); /* Light red background */
+}
+
+tr.first-place:hover {
+    background-color: rgba(225, 6, 0, 0.3);
+}
+
+/* Error and empty state styles */
+tr.error td, tr.no-data td {
+    text-align: center;
+    padding: 30px 15px;
+    color: #999;
+    font-style: italic;
+}
+
+tr.error td {
+    color: #e10600; /* F1 red */
+}
+
+/* Footer Styles */
+footer {
+    text-align: center;
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #444;
+    color: #999;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    table {
+        font-size: 14px;
+    }
+    
+    th, td {
+        padding: 10px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+} 

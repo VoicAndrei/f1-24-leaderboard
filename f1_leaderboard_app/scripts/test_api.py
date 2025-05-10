@@ -31,7 +31,7 @@ API_BASE_URL = f"http://{API_HOST}:{API_PORT}"
 def test_api_connection():
     """Test basic API connectivity."""
     try:
-        response = requests.get(API_BASE_URL)
+        response = requests.get(f"{API_BASE_URL}/api")
         logger.info(f"API connection test: {response.status_code}")
         logger.info(f"Response: {response.json()}")
         return response.status_code == 200
@@ -98,6 +98,7 @@ def main():
         
         # Submit lap times
         tracks = [
+            "Bahrain International Circuit",  # First track in F1_2024_TRACKS
             "Autodromo Nazionale Monza",
             "Circuit de Monaco",
             "Silverstone Circuit"
