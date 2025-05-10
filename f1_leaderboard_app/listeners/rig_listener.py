@@ -24,45 +24,49 @@ import time
 import logging
 import argparse
 import requests
+import random
+import socket
 from datetime import datetime
 from urllib.parse import urljoin
 
 # Add the project root to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.append(project_root)
 
 # Import app configuration
-from config.app_config import (
-    TELEMETRY_REPO_PATH, 
-    TRACK_ID_MAPPING, 
-    F1_2024_TRACKS,
-    API_HOST,
-    API_PORT,
-    DEFAULT_UDP_PORT
-)
+try:
+    from config.app_config import (
+        TELEMETRY_REPO_PATH, 
+        TRACK_ID_MAPPING, 
+        F1_2024_TRACKS,
+        API_HOST,
+        API_PORT,
+        DEFAULT_UDP_PORT
+    )
+except ImportError as e:
+    print(f"Error importing app configuration: {e}")
+    print("Make sure you're running this script from the project root directory.")
+    sys.exit(1)
 
 # Add the telemetry repository to the Python path
 sys.path.append(TELEMETRY_REPO_PATH)
-
-# Import telemetry components
-try:
-    from parser2024 import Listener, HEADER_FIELD_TO_PACKET_TYPE
-    from dictionnaries import track_dictionary, conversion
-    from Player import Player
-    from Session import Session
-except ImportError as e:
-    print(f"Error importing F1 telemetry repository components: {e}")
-    print(f"Make sure the repository is available at: {TELEMETRY_REPO_PATH}")
-    sys.exit(1)
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(os.path.join(project_root, f"rig_listener_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"))
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Define max retry attempts and backoff settings
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2  # seconds
+RETRY_JITTER = 0.5  # seconds
 
 # Reverse track dictionary mapping (ID to name)
 TRACK_ID_TO_NAME = {v: k for k, v in TRACK_ID_MAPPING.items()}
@@ -85,24 +89,69 @@ class RigTelemetryListener:
         self.lap_submission_url = urljoin(self.api_base_url, "/api/laptime")
         
         self.listener = None
-        self.players = [Player() for _ in range(22)]  # F1 has a maximum of 22 cars
-        self.session = Session()
-        self.last_lap_times = [0] * 22  # Store previous lap times to detect changes
+        self.players = None
+        self.session = None
+        self.last_lap_times = None
         self.running = False
+        self.connection_error_count = 0
+        self.max_connection_errors = 10
         
         logger.info(f"Rig ID: {self.rig_id}")
         logger.info(f"API endpoint: {self.lap_submission_url}")
         logger.info(f"UDP port: {self.udp_port}")
         
+    def reset_state(self):
+        """Reset the internal state, used on initialization and reconnection."""
+        try:
+            # Import telemetry components
+            from parser2024 import Listener, HEADER_FIELD_TO_PACKET_TYPE
+            from dictionnaries import track_dictionary, conversion
+            from Player import Player
+            from Session import Session
+
+            self.players = [Player() for _ in range(22)]  # F1 has a maximum of 22 cars
+            self.session = Session()
+            self.last_lap_times = [0] * 22  # Store previous lap times to detect changes
+            self.connection_error_count = 0
+            
+            return True
+        except ImportError as e:
+            logger.error(f"Error importing F1 telemetry repository components: {e}")
+            logger.error(f"Make sure the repository is available at: {TELEMETRY_REPO_PATH}")
+            return False
+        
     def initialize(self):
         """Initialize the UDP listener."""
         try:
+            # Reset internal state
+            if not self.reset_state():
+                return False
+                
             logger.info(f"Initializing UDP listener on port {self.udp_port}")
-            self.listener = Listener(port=self.udp_port)
+            
+            # Try to close existing listener if there is one
+            if self.listener:
+                try:
+                    self.listener.close()
+                except:
+                    pass
+            
+            # Import telemetry listener
+            try:
+                from parser2024 import Listener
+                self.listener = Listener(port=self.udp_port)
+            except ImportError as e:
+                logger.error(f"Error importing Listener from F1 telemetry repository: {e}")
+                return False
+            except OSError as e:
+                logger.error(f"Network error when creating UDP listener: {e}")
+                logger.error("Another application may be using this port or there might be network configuration issues.")
+                return False
             
             # Test API connection
             try:
-                response = requests.get(self.api_base_url)
+                logger.info(f"Testing API connection to {self.api_base_url}")
+                response = requests.get(self.api_base_url, timeout=5)
                 logger.info(f"API connection test: {response.status_code}")
             except requests.RequestException as e:
                 logger.warning(f"Unable to connect to API at {self.api_base_url}: {e}")
@@ -130,39 +179,46 @@ class RigTelemetryListener:
                 return official_name, True
         
         # Try to get internal name from track_dictionary
-        if track_id in track_dictionary:
-            internal_name = track_dictionary[track_id][0]
+        try:
+            from dictionnaries import track_dictionary
             
-            # Try a fuzzy match with F1_2024_TRACKS
-            for official_name in F1_2024_TRACKS:
-                # Convert to lowercase for matching
-                if internal_name.lower() in official_name.lower():
-                    return official_name, True
-            
-            # No match found, return best guess with warning
-            best_guess = None
-            
-            # Special cases
-            if internal_name == "sakhir":
-                best_guess = "Bahrain International Circuit"
-            elif internal_name == "melbourne":
-                best_guess = "Albert Park Circuit"
-            elif internal_name == "shanghai": 
-                best_guess = "Shanghai International Circuit"
-            elif internal_name == "monaco":
-                best_guess = "Circuit de Monaco"
-            elif internal_name == "catalunya":
-                best_guess = "Circuit de Barcelona-Catalunya"
-            elif internal_name == "spa":
-                best_guess = "Circuit de Spa-Francorchamps"
-            
-            if best_guess:
-                logger.warning(f"Track '{internal_name}' not directly mapped, using best guess: {best_guess}")
-                return best_guess, True
-            
-            # Return internal name with warning
-            logger.warning(f"Track '{internal_name}' (ID: {track_id}) not found in F1_2024_TRACKS, using internal name")
-            return f"Track: {internal_name}", False
+            if track_id in track_dictionary:
+                internal_name = track_dictionary[track_id][0]
+                
+                # Try a fuzzy match with F1_2024_TRACKS
+                for official_name in F1_2024_TRACKS:
+                    # Convert to lowercase for matching
+                    if internal_name.lower() in official_name.lower():
+                        return official_name, True
+                
+                # No match found, return best guess with warning
+                best_guess = None
+                
+                # Special cases
+                if internal_name == "sakhir":
+                    best_guess = "Bahrain International Circuit"
+                elif internal_name == "melbourne":
+                    best_guess = "Albert Park Circuit"
+                elif internal_name == "shanghai": 
+                    best_guess = "Shanghai International Circuit"
+                elif internal_name == "monaco":
+                    best_guess = "Circuit de Monaco"
+                elif internal_name == "catalunya":
+                    best_guess = "Circuit de Barcelona-Catalunya"
+                elif internal_name == "spa":
+                    best_guess = "Circuit de Spa-Francorchamps"
+                elif internal_name == "interlagos":
+                    best_guess = "Autódromo José Carlos Pace"
+                
+                if best_guess:
+                    logger.warning(f"Track '{internal_name}' not directly mapped, using best guess: {best_guess}")
+                    return best_guess, True
+                
+                # Return internal name with warning
+                logger.warning(f"Track '{internal_name}' (ID: {track_id}) not found in F1_2024_TRACKS, using internal name")
+                return f"Track: {internal_name}", False
+        except ImportError:
+            logger.error("Could not import track_dictionary from the telemetry repository")
         
         # Unknown track
         logger.warning(f"Unknown track ID: {track_id}, cannot submit lap time")
@@ -188,7 +244,7 @@ class RigTelemetryListener:
         return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
     
     def submit_lap_time(self, track_name, lap_time_ms):
-        """Submit lap time to the backend API.
+        """Submit lap time to the backend API with retries.
         
         Args:
             track_name (str): Name of the track
@@ -203,25 +259,44 @@ class RigTelemetryListener:
             "lap_time_ms": lap_time_ms
         }
         
-        try:
-            response = requests.post(
-                self.lap_submission_url,
-                json=payload,
-                timeout=5  # 5 second timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                logger.info(f"Lap time submitted successfully: {result.get('message')}")
-                return True
-            else:
-                logger.error(f"Failed to submit lap time: HTTP {response.status_code}")
-                logger.error(f"Response: {response.text}")
-                return False
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.post(
+                    self.lap_submission_url,
+                    json=payload,
+                    timeout=5  # 5 second timeout
+                )
                 
-        except requests.RequestException as e:
-            logger.error(f"Error submitting lap time to API: {e}")
-            return False
+                if response.status_code == 200:
+                    result = response.json()
+                    logger.info(f"Lap time submitted successfully: {result.get('message')}")
+                    self.connection_error_count = 0  # Reset error counter on success
+                    return True
+                elif response.status_code >= 500:
+                    # Server error, might be temporary
+                    logger.warning(f"Server error when submitting lap time: HTTP {response.status_code}, attempt {attempt+1}/{MAX_RETRIES}")
+                else:
+                    # Client error, likely won't succeed with retry
+                    logger.error(f"Failed to submit lap time: HTTP {response.status_code}")
+                    logger.error(f"Response: {response.text}")
+                    return False
+                    
+            except requests.RequestException as e:
+                logger.error(f"Error submitting lap time to API (attempt {attempt+1}/{MAX_RETRIES}): {e}")
+                self.connection_error_count += 1
+            
+            # Exponential backoff with jitter before retry
+            if attempt < MAX_RETRIES - 1:  # Don't sleep after the last attempt
+                backoff = RETRY_BACKOFF_BASE * (2 ** attempt) + random.uniform(0, RETRY_JITTER)
+                logger.info(f"Retrying in {backoff:.2f} seconds...")
+                time.sleep(backoff)
+                
+        # Check if we're having persistent connection issues
+        if self.connection_error_count >= self.max_connection_errors:
+            logger.warning(f"Persistent connection errors detected ({self.connection_error_count}). "
+                         f"Will continue capturing telemetry but API submissions may fail.")
+        
+        return False
     
     def process_lap_data(self, packet, player_car_index):
         """Process lap data packet, print and submit new lap times.
@@ -302,39 +377,104 @@ class RigTelemetryListener:
     def run(self):
         """Main loop to capture and process telemetry data."""
         if not self.initialize():
+            logger.error("Failed to initialize telemetry listener, exiting.")
             return False
         
         self.running = True
         logger.info(f"Telemetry listener for rig {self.rig_id} started. Waiting for F1 2024 telemetry data...")
         logger.info("Press Ctrl+C to stop.")
         
+        # Track errors for reconnection logic
+        consecutive_errors = 0
+        last_data_time = time.time()
+        reconnect_wait = 5  # seconds
+        max_consecutive_errors = 10
+        max_idle_time = 30  # seconds without data before reconnect
+        
         try:
             while self.running:
-                # Get packet from the listener
-                header_and_packet = self.listener.get()
+                try:
+                    # Get packet from the listener
+                    header_and_packet = self.listener.get()
+                    
+                    if header_and_packet:
+                        header, packet = header_and_packet
+                        consecutive_errors = 0  # Reset error counter
+                        last_data_time = time.time()
+                        
+                        # Get player car index
+                        player_car_index = header.m_player_car_index
+                        
+                        # Process different packet types
+                        if header.m_packet_id == 1:  # Session data (includes track info)
+                            self.process_session_data(packet)
+                        
+                        elif header.m_packet_id == 2:  # Lap data
+                            self.process_lap_data(packet, player_car_index)
+                    
+                    # Check for idle time (no data received)
+                    elif time.time() - last_data_time > max_idle_time:
+                        logger.warning(f"No data received for {max_idle_time} seconds. F1 game might not be running.")
+                        logger.info("Reinitializing listener...")
+                        if self.initialize():
+                            logger.info("Listener reinitialized successfully.")
+                            last_data_time = time.time()  # Reset timer
+                        else:
+                            logger.error("Failed to reinitialize listener.")
+                            time.sleep(reconnect_wait)
+                    
+                    # Small sleep to prevent high CPU usage
+                    time.sleep(0.001)
                 
-                if header_and_packet:
-                    header, packet = header_and_packet
+                except (socket.error, OSError) as e:
+                    consecutive_errors += 1
+                    logger.error(f"Network error: {e}")
                     
-                    # Get player car index
-                    player_car_index = header.m_player_car_index
-                    
-                    # Process different packet types
-                    if header.m_packet_id == 1:  # Session data (includes track info)
-                        self.process_session_data(packet)
-                    
-                    elif header.m_packet_id == 2:  # Lap data
-                        self.process_lap_data(packet, player_car_index)
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.warning(f"Too many consecutive errors ({consecutive_errors}). Reinitializing listener...")
+                        if self.initialize():
+                            logger.info("Listener reinitialized successfully.")
+                            consecutive_errors = 0
+                        else:
+                            logger.error("Failed to reinitialize listener.")
+                        time.sleep(reconnect_wait)
                 
-                # Small sleep to prevent high CPU usage
-                time.sleep(0.001)
+                except Exception as e:
+                    consecutive_errors += 1
+                    logger.error(f"Error processing telemetry data: {e}")
+                    
+                    if consecutive_errors >= max_consecutive_errors:
+                        logger.warning(f"Too many consecutive errors ({consecutive_errors}). Reinitializing listener...")
+                        if self.initialize():
+                            logger.info("Listener reinitialized successfully.")
+                            consecutive_errors = 0
+                        else:
+                            logger.error("Failed to reinitialize listener.")
+                        time.sleep(reconnect_wait)
                 
         except KeyboardInterrupt:
             logger.info("Telemetry listener stopped by user.")
         except Exception as e:
-            logger.error(f"Error in telemetry listener: {e}")
+            logger.error(f"Fatal error in telemetry listener: {e}")
+        finally:
+            # Clean up
+            if self.listener:
+                try:
+                    self.listener.close()
+                    logger.info("UDP listener closed.")
+                except:
+                    pass
         
         return True
+
+def validate_rig_id(rig_id):
+    """Validate rig ID format."""
+    import re
+    if not re.match(r'^RIG[1-9][0-9]*$', rig_id):
+        raise argparse.ArgumentTypeError(
+            "Rig ID must be in the format 'RIGn' where n is a positive number (e.g., RIG1, RIG2, RIG3)."
+        )
+    return rig_id
 
 def parse_arguments():
     """Parse command-line arguments.
@@ -342,32 +482,36 @@ def parse_arguments():
     Returns:
         argparse.Namespace: Parsed arguments
     """
-    parser = argparse.ArgumentParser(description="F1 2024 Telemetry Listener for a specific simulator rig")
+    parser = argparse.ArgumentParser(
+        description="F1 2024 Telemetry Listener for a specific simulator rig",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     
     parser.add_argument(
         "--rig-id",
         required=True,
-        help="Identifier for the simulator rig (e.g., 'RIG1', 'RIG2', 'RIG3')"
+        type=validate_rig_id,
+        help="Identifier for the simulator rig (format: RIGn, e.g., 'RIG1', 'RIG2', 'RIG3')"
     )
     
     parser.add_argument(
         "--api-host",
         default=API_HOST,
-        help=f"Host address for the backend API (default: {API_HOST})"
+        help=f"Host address for the backend API"
     )
     
     parser.add_argument(
         "--api-port",
         type=int,
         default=API_PORT,
-        help=f"Port for the backend API (default: {API_PORT})"
+        help=f"Port for the backend API"
     )
     
     parser.add_argument(
         "--udp-port",
         type=int,
         default=DEFAULT_UDP_PORT,
-        help=f"UDP port to listen on (default: {DEFAULT_UDP_PORT})"
+        help=f"UDP port to listen on"
     )
     
     return parser.parse_args()
@@ -387,6 +531,8 @@ def main():
         )
         
         listener.run()
+    except KeyboardInterrupt:
+        logger.info("Stopped by user.")
     except Exception as e:
         logger.error(f"Unhandled error: {e}")
         return 1
