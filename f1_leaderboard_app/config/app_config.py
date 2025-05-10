@@ -65,7 +65,7 @@ TELEMETRY_REPO_PATH = "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-applicat
 DATABASE_URL = "backend/database/f1_leaderboard.db"
 
 # API server configuration
-API_HOST = "0.0.0.0"
+API_HOST = "localhost"
 API_PORT = 8000
 
 # Auto cycle interval for leaderboard display (in seconds)

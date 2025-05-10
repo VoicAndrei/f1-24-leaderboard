@@ -2,165 +2,135 @@
 """
 F1 Leaderboard Application - API Test Script
 
-This script tests the API endpoints for submitting lap times and retrieving leaderboard data.
+This script tests the API functionality by directly submitting a lap time
+and then retrieving the leaderboard for verification.
 """
 
 import sys
-import os
 import requests
-import json
 import time
-from datetime import datetime
+import traceback
+import logging
 
-# Add the project root to the Python path
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(script_dir, ".."))
-sys.path.append(project_root)
+# Set up logging to file and console
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("api_test.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# Base URL for API
-API_BASE_URL = "http://localhost:8000/api"
+# API configuration
+API_HOST = "localhost"
+API_PORT = 8000
+API_BASE_URL = f"http://{API_HOST}:{API_PORT}"
 
-def submit_lap_time(rig_identifier, track_name, lap_time_ms):
-    """
-    Submit a lap time to the API.
-    
-    Args:
-        rig_identifier (str): Identifier for the simulator rig (e.g., "RIG1")
-        track_name (str): Name of the track
-        lap_time_ms (int): Lap time in milliseconds
-        
-    Returns:
-        dict: Response from the API
-    """
-    url = f"{API_BASE_URL}/laptime"
-    data = {
-        "rig_identifier": rig_identifier,
+def test_api_connection():
+    """Test basic API connectivity."""
+    try:
+        response = requests.get(API_BASE_URL)
+        logger.info(f"API connection test: {response.status_code}")
+        logger.info(f"Response: {response.json()}")
+        return response.status_code == 200
+    except requests.RequestException as e:
+        logger.error(f"Error connecting to API: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error testing API connection: {e}")
+        logger.error(traceback.format_exc())
+        return False
+
+def submit_lap_time(rig_id, track_name, lap_time_ms):
+    """Submit a lap time to the API."""
+    url = f"{API_BASE_URL}/api/laptime"
+    payload = {
+        "rig_identifier": rig_id,
         "track_name": track_name,
         "lap_time_ms": lap_time_ms
     }
     
-    response = requests.post(url, json=data)
-    
-    if response.status_code == 200:
-        print(f"Lap time submitted successfully: {response.json()}")
-        return response.json()
-    else:
-        print(f"Error submitting lap time: {response.status_code} - {response.text}")
-        return None
+    try:
+        logger.info(f"Submitting lap time: {payload}")
+        response = requests.post(url, json=payload)
+        logger.info(f"Response status: {response.status_code}")
+        logger.info(f"Response: {response.json()}")
+        return response.status_code == 200
+    except requests.RequestException as e:
+        logger.error(f"Error submitting lap time: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error submitting lap time: {e}")
+        logger.error(traceback.format_exc())
+        return False
 
-def get_leaderboard(track_name, limit=10):
-    """
-    Get the leaderboard for a specific track.
+def get_leaderboard(track_name):
+    """Get the leaderboard for a track."""
+    url = f"{API_BASE_URL}/api/leaderboard/{track_name}"
     
-    Args:
-        track_name (str): Name of the track
-        limit (int, optional): Maximum number of lap times to return. Defaults to 10.
-        
-    Returns:
-        list: List of lap times for the track
-    """
-    url = f"{API_BASE_URL}/leaderboard/{track_name}"
-    params = {"limit": limit}
-    
-    response = requests.get(url, params=params)
-    
-    if response.status_code == 200:
-        lap_times = response.json()
-        print(f"Retrieved {len(lap_times)} lap times for {track_name}:")
-        
-        for i, lap in enumerate(lap_times, 1):
-            time_str = format_lap_time(lap["lap_time_ms"])
-            print(f"{i}. {lap['player_name']} - {time_str} (Rig: {lap['rig_identifier']})")
-        
-        return lap_times
-    else:
-        print(f"Error retrieving leaderboard: {response.status_code} - {response.text}")
+    try:
+        logger.info(f"Getting leaderboard for: {track_name}")
+        response = requests.get(url)
+        logger.info(f"Response status: {response.status_code}")
+        leaderboard = response.json()
+        logger.info(f"Leaderboard: {leaderboard}")
+        return leaderboard
+    except requests.RequestException as e:
+        logger.error(f"Error getting leaderboard: {e}")
         return None
-
-def get_tracks():
-    """
-    Get all available tracks.
-    
-    Returns:
-        list: List of track information
-    """
-    url = f"{API_BASE_URL}/tracks"
-    
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        tracks = response.json()
-        print(f"Retrieved {len(tracks)} tracks:")
-        
-        for track in tracks:
-            print(f"- {track['name']} (ID: {track['id']})")
-        
-        return tracks
-    else:
-        print(f"Error retrieving tracks: {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"Unexpected error getting leaderboard: {e}")
+        logger.error(traceback.format_exc())
         return None
-
-def format_lap_time(milliseconds):
-    """
-    Format lap time from milliseconds to MM:SS.mmm.
-    
-    Args:
-        milliseconds (int): Lap time in milliseconds
-        
-    Returns:
-        str: Formatted lap time as MM:SS.mmm
-    """
-    if milliseconds == 0:
-        return "00:00.000"
-    
-    total_seconds = milliseconds / 1000
-    minutes = int(total_seconds // 60)
-    seconds = int(total_seconds % 60)
-    milliseconds = int((total_seconds - int(total_seconds)) * 1000)
-    
-    return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
 
 def main():
-    """
-    Main function to test the API endpoints.
-    """
-    print("F1 Leaderboard API Test")
-    print("======================")
-    
-    # Submit test lap times
-    tracks_to_test = [
-        "Bahrain International Circuit",
-        "Jeddah Corniche Circuit",
-        "Albert Park Circuit"
-    ]
-    
-    # Get tracks
-    print("\nFetching available tracks...")
-    get_tracks()
-    
-    # Submit lap times for each track
-    print("\nSubmitting test lap times...")
-    for track in tracks_to_test:
-        # RIG1 lap times
-        submit_lap_time("RIG1", track, 90000)  # 1:30.000
-        submit_lap_time("RIG1", track, 92500)  # 1:32.500
+    """Main function."""
+    try:
+        logger.info("F1 Leaderboard API Test")
+        logger.info("======================")
         
-        # RIG2 lap times
-        submit_lap_time("RIG2", track, 89500)  # 1:29.500
-        submit_lap_time("RIG2", track, 91000)  # 1:31.000
+        # Test API connection
+        if not test_api_connection():
+            logger.error("Failed to connect to API. Make sure it's running.")
+            return 1
         
-        # RIG3 lap times
-        submit_lap_time("RIG3", track, 88000)  # 1:28.000
-        submit_lap_time("RIG3", track, 93000)  # 1:33.000
+        # Submit lap times
+        tracks = [
+            "Autodromo Nazionale Monza",
+            "Circuit de Monaco",
+            "Silverstone Circuit"
+        ]
         
-        # Wait a moment before fetching the leaderboard
+        rig_id = "RIG1"
+        
+        # Submit multiple lap times for different tracks
+        for track in tracks:
+            # Submit 3 lap times per track
+            for i in range(3):
+                # Generate lap times between 85 and 95 seconds
+                lap_time_ms = 85000 + (i * 2000) + (1000 if i == 1 else 0)
+                
+                if not submit_lap_time(rig_id, track, lap_time_ms):
+                    logger.warning(f"Failed to submit lap time for {track}")
+                
+                # Wait a bit between submissions
+                time.sleep(0.5)
+        
+        # Wait for any database operations to complete
         time.sleep(1)
         
-        # Get leaderboard for the track
-        print(f"\nLeaderboard for {track}:")
-        get_leaderboard(track)
-    
-    return 0
+        # Get leaderboards for verification
+        for track in tracks:
+            get_leaderboard(track)
+        
+        logger.info("Test completed successfully")
+        return 0
+    except Exception as e:
+        logger.error(f"Unhandled exception in main: {e}")
+        logger.error(traceback.format_exc())
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main()) 
