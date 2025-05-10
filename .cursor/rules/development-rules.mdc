@@ -1,0 +1,100 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+**F1 Leaderboard Application - Cursor Project Rules**
+
+1.  **Project Overview:**
+    *   **Goal:** Develop an F1 leaderboard application for a simulator shop featuring 3 racing rigs.
+    *   **Core Features:**
+        *   Display the top 10 lap times for each official F1 2024 track.
+        *   Automatically cycle through different track leaderboards every 30 seconds.
+        *   Allow an administrator (shop responsible) to manually select a specific track's leaderboard for display.
+        *   Allow the administrator to toggle the automatic cycling feature on or off.
+        *   Enable the administrator, using a reception laptop, to update/assign player names to each of the 3 simulator rigs. This name will then be associated with telemetry data from that rig.
+    *   **Anticipated Architecture:**
+        *   **Backend:** Python with FastAPI.
+        *   **Database:** SQLite for local data storage (lap times, player assignments, track configurations).
+        *   **Frontend UIs:** HTML, CSS, and vanilla JavaScript for the leaderboard display and admin interface.
+        *   **Telemetry Ingestion:** Python-based listeners utilizing the specified open-source telemetry library. These listeners will likely run on each simulator PC and send data to the central backend.
+
+2.  **Key Repository Guidance:**
+    *   **Path:** `/c:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application`
+    *   **Priority:** CRITICAL. This existing repository is the primary source for F1 2024 telemetry data parsing.
+    *   **Action:** Thoroughly analyze this repository. Understand its data structures, packet formats, and any provided examples for capturing and parsing telemetry (especially lap times, session data, player information, and track identification).
+    *   **Leverage:** Adapt and use functions/classes from this library directly. Avoid re-implementing telemetry parsing if the library provides a robust solution. Focus on integrating it into our application's data flow.
+    *   **Identify:** Key files or modules within this repository that handle UDP packet listening and decoding for F1 2024.
+
+3.  **Development Environment & Constraints:**
+    *   **Primary Language:** Python 3.x (latest stable version available to you).
+    *   **Backend Framework:** FastAPI.
+    *   **Database:** SQLite. The database file should be managed by the backend application.
+    *   **Frontend:** Standard HTML5, CSS3, and JavaScript (ES6+). Avoid complex frontend frameworks (like React, Vue, Angular) to keep complexity low. Focus on clean, functional UIs.
+    *   **Networking:** The application will operate on a local Ethernet network.
+        *   Simulator PCs (3): Run F1 2024 and a telemetry listener client.
+        *   Reception Laptop (1): Runs the central backend server (API, database, web server for UIs).
+        *   Leaderboard Display: A browser connected to the reception laptop's web server.
+    *   **Modularity:** Design the application with clear separation of concerns:
+        *   Telemetry Listener module(s).
+        *   Data Storage module (interfacing with SQLite).
+        *   Backend API (FastAPI).
+        *   Leaderboard Display UI (frontend).
+        *   Admin Interface UI (frontend).
+    *   **Operating System:** Assume development and deployment on Windows. Python code should be written to be as cross-platform as possible, but Windows is the primary target.
+
+4.  **Admin Functionality Details:**
+    *   **Player Name Mapping:**
+        *   Admin UI accessible from the reception laptop.
+        *   Mechanism to assign a textual player name to each of the 3 simulator rigs (e.g., Rig 1, Rig 2, Rig 3). These rig identifiers should be static.
+        *   This player-rig mapping must be persistent (stored in the database).
+        *   Lap times recorded from a rig must be associated with the player name assigned to that rig *at the time the lap was set*.
+    *   **Leaderboard Control (via Admin UI):**
+        *   Manually select any F1 2024 track to be displayed on the leaderboard.
+        *   Toggle the automatic 30-second cycling of track leaderboards on or off.
+        *   These controls should have an immediate effect on the main leaderboard display.
+
+5.  **Leaderboard Display Requirements:**
+    *   **Technology:** Web page served by the FastAPI backend, viewable in any modern browser.
+    *   **Content:**
+        *   Clear display of the currently shown F1 2024 track name.
+        *   A list/table of the top 10 lap times for that track, showing: Rank, Player Name, Lap Time (formatted as MM:SS.mmm).
+    *   **Behavior:**
+        *   When auto-cycle is ON: The displayed track leaderboard changes to the next track in the sequence every 30 seconds. The sequence should cover all F1 2024 tracks.
+        *   When auto-cycle is OFF: The display shows the manually selected track, or the last track shown if no manual selection is active.
+        *   The leaderboard data should update dynamically or refresh periodically (e.g., every 5-10 seconds) to show new best times.
+
+6.  **Data Flow Considerations:**
+    *   **Telemetry Capture:** F1 2024 game on each simulator PC broadcasts telemetry data.
+    *   **Telemetry Listeners:** A Python script, using the key repository, will run on each of the 3 gaming PCs. Each script instance must be configured with a unique rig identifier (e.g., "RIG1", "RIG2", "RIG3").
+    *   **Data Submission:** Upon detecting a completed lap time, each listener will send the relevant data (lap time, track ID/name, rig ID) via an HTTP POST request to a specific endpoint on the central backend API (running on the reception laptop).
+    *   **Data Processing & Storage (Backend):** The backend API receives this data. It looks up the player name currently assigned to the submitting rig ID. It then stores the lap time, track, player name, and timestamp in the SQLite database.
+    *   **API for UIs:** The backend API will expose endpoints for:
+        *   Fetching leaderboard data (top 10 for a track).
+        *   Fetching data for the currently displayed track (for auto-cycling or manual selection).
+        *   Admin functions (assigning player names, selecting track, toggling auto-cycle).
+    *   **Leaderboard Display UI:** Polls an API endpoint to get the current leaderboard data and track name, refreshing its display.
+    *   **Admin UI:** Interacts with various API endpoints to manage settings and view rig assignments.
+
+7.  **Iterative Development & Testing Philosophy:**
+    *   Adhere strictly to the provided multi-stage development plan. Each prompt represents a distinct stage.
+    *   Focus *only* on the tasks specified in the current stage's prompt. Do not anticipate or work on future stages.
+    *   Write code that is testable. The human developer will verify the functionality implemented at each stage based on the provided testing instructions.
+    *   Ensure all code for a given stage is complete and functional for the tasks assigned in that stage.
+
+8.  **Code Style and Conventions:**
+    *   **Python:** Strictly follow PEP 8 guidelines. Use a linter like Flake8 if possible (or be mindful of its common rules).
+    *   **Naming:** Use clear, descriptive names for variables, functions, classes, and files.
+    *   **Comments:** Add comments to explain complex logic, assumptions, or non-obvious code sections.
+    *   **Project Structure:** Organize files into logical directories (e.g., `backend/`, `frontend/`, `listeners/`, `database/`, `static/`, `templates/`). The plan will guide this.
+
+9.  **Error Handling & Logging:**
+    *   Implement robust error handling using `try-except` blocks for operations like network requests, file I/O, database interactions, and data parsing.
+    *   Use Python's built-in `logging` module for application logging. Log important events, warnings, and errors. Configure basic logging to console and/or a file.
+    *   Anticipate potential issues: F1 game not running/broadcasting, network connectivity problems, database errors, invalid telemetry data.
+
+10. **Context Management (for AI Agent):**
+    *   You have a limited context window. The prompt for each stage will provide necessary context ("Previously Completed," "Current Stage Goal," "Overall Project Outline").
+    *   Focus exclusively on implementing the tasks detailed in the *current* prompt.
+    *   The "Overall Project Outline & Upcoming Stages" section is for your general orientation only; do not implement tasks from upcoming stages.
+
