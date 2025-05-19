@@ -1,54 +1,62 @@
 # F1 Simulator Timer Application
 
-A simple application that displays a transparent countdown timer and sends an ESC key when the timer expires to pause the F1 2024 game.
+A networked timer application that displays a transparent countdown timer on simulator rigs and allows remote control from an operator PC.
+
+## Overview
+
+This application consists of:
+
+1. **Timer Server** - Runs on each simulator rig PC
+2. **Timer Control** - Runs on the operator's PC to control timers remotely
+3. **Timer Display** - Transparent overlay showing the countdown
+
+## Setup
+
+### On Each Simulator Rig PC:
+
+1. Copy the `timer_app` folder to the rig PC
+2. Run `start_timer_server.bat` to start the timer server
+3. The server will listen for commands from the operator's PC
+
+### On the Operator's PC:
+
+1. Copy the `timer_app` folder to the operator's PC
+2. Edit `timer_config.ini` to set the correct IP addresses for your rig PCs
+3. Run `start_timer_control.bat` to open the control interface
+4. Use the interface to start/stop timers on any connected rig
 
 ## Requirements
 
-Before running the application, you need to install the required dependencies:
+- Python 3.6 or higher on all PCs
+- Network connectivity between the operator PC and rig PCs
+- Dependencies (automatically installed):
+  - pyautogui
 
-```bash
-pip install pyautogui
+## Configuration
+
+The `timer_config.ini` file contains the network configuration:
+
+```ini
+[RIG1]
+ip = 192.168.1.101  # Change to the actual IP of Rig 1
+port = 5678
+name = Rig 1
 ```
 
-Tkinter should be included with your Python installation.
+Update the IP addresses to match your actual network setup before use.
 
-## Usage
+## How it Works
 
-### Graphical User Interface (Recommended)
+1. The **Timer Server** on each rig listens for commands over the network
+2. The **Timer Control** interface on the operator's PC sends commands to control timers
+3. When a timer is started, the rig displays a transparent countdown in the specified corner
+4. When the timer expires, it sends an ESC key to pause the game
+5. The timer can be stopped at any time from the operator's PC
 
-The easiest way to use the timer is with the GUI launcher:
+## For Saturday's Event
 
-1. Double-click the `start_timer.bat` file
-   - OR run `python timer_launcher.py` from the command line
-2. Select the rig number, timer duration, and position
-3. Click "Start Timer"
+For your Saturday event with only Rig 1:
 
-### Command-line Usage (Advanced)
-
-Run the timer directly with custom settings:
-
-```bash
-python timer.py --rig 1 --minutes 5 --position top-right
-```
-
-#### Command-line arguments
-
-- `--rig`: The rig number (default: 1)
-- `--minutes`: Timer duration in minutes (default: 10)
-- `--position`: Position of the timer on screen (default: top-right)
-  - Options: top-right, top-left, bottom-right, bottom-left
-
-## How it works
-
-1. The script creates a transparent overlay window in the specified corner of the screen
-2. The overlay displays a countdown timer for the specified rig
-3. When the timer expires, it sends an ESC key to pause the game
-4. The overlay will close 5 seconds after the timer expires
-
-## For future integration
-
-To integrate this with the admin interface after the event, consider:
-
-1. Adding a timer control section to the admin panel
-2. Using WebSocket to communicate between the admin interface and the timer application
-3. Creating a mechanism to start/stop timers remotely 
+1. Start the **Timer Server** on Rig 1 using `start_timer_server.bat`
+2. On the operator's PC, update `timer_config.ini` with Rig 1's correct IP address
+3. Use the **Timer Control** interface to set and start timers for Rig 1

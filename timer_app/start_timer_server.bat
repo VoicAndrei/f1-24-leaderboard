@@ -1,5 +1,5 @@
 @echo off
-echo F1 Simulator Timer Application
+echo F1 Simulator Timer Server
 echo.
 
 REM Check if Python is installed
@@ -12,7 +12,7 @@ if %ERRORLEVEL% NEQ 0 (
     exit /b 1
 )
 
-REM Check if pyautogui is installed
+REM Check if dependencies are installed
 pip show pyautogui >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     echo Installing pyautogui...
@@ -24,6 +24,6 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
-echo Starting the F1 Simulator Timer Launcher...
-python timer_launcher.py
-exit /b 0 
+echo Starting Timer Server on Rig 1...
+python timer_server.py --rig 1
+pause 
