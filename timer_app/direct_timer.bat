@@ -1,5 +1,5 @@
 @echo off
-echo F1 Simulator Timer Server
+echo F1 Direct Timer Launcher
 echo.
 
 REM Check if Python is installed
@@ -24,7 +24,11 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
-echo Starting Timer Server on Rig 1...
-echo Listening on port 8080...
-python timer_server.py --rig 1 --port 8080
-pause 
+echo Starting Direct Timer Application for Rig 1...
+echo.
+echo This simpler approach does not use network communication.
+echo Just use the buttons to control timers directly on this PC.
+echo.
+
+python direct_timer.py --rig 1
+exit /b 0 
