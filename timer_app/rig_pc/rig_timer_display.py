@@ -1,7 +1,8 @@
 import tkinter as tk
 import threading
 import time
-import pyautogui
+# import pyautogui # We'll replace this for the key press
+import pydirectinput # Added for more reliable game input
 from flask import Flask, request, jsonify
 
 # --- Configuration ---
@@ -73,9 +74,11 @@ def countdown_timer_task():
         root.after(0, update_timer_display, "TIME UP!")
         print("Time's up! Sending ESC key.")
         try:
-            pyautogui.press('esc')
+            # pyautogui.press('esc') # Old method
+            pydirectinput.press('esc') # New method using pydirectinput
+            print("ESC key sent via pydirectinput.")
         except Exception as e:
-            print(f"Error pressing ESC key: {e}")
+            print(f"Error pressing ESC key with pydirectinput: {e}")
         
         # Give a moment for "TIME UP!" message before hiding/resetting
         time.sleep(3) 
