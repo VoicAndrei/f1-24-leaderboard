@@ -1,5 +1,5 @@
 @echo off
-echo F1 Simulator Timer Server
+echo Simple F1 Simulator Timer Server
 echo.
 
 REM Check if Python is installed
@@ -24,6 +24,9 @@ if %ERRORLEVEL% NEQ 0 (
     )
 )
 
-echo Starting Timer Server on Rig 1...
-python timer_server.py --rig 1 --port 80
+echo Starting Simplified Timer Server on Rig 1...
+echo This version uses a simpler networking approach that might work better.
+echo.
+
+python timer_server_simple.py --rig 1 --port 5678
 pause 
