@@ -25,7 +25,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(root_dir)
 
 # Import app configuration and database manager
-from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS
+from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS, F1_TRACK_DISPLAY_NAMES
 from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
@@ -122,7 +122,7 @@ def get_current_leaderboard_track() -> str:
     or returns a manually selected track if one is set.
     
     Returns:
-        str: The name of the track to display
+        str: The *full official name* of the track to display
     """
     global current_track_index, last_cycle_time, manual_track_selection
     
@@ -137,7 +137,7 @@ def get_current_leaderboard_track() -> str:
         last_cycle_time = time.time()
         logger.info(f"Auto-cycling to track: {F1_2024_TRACKS[current_track_index]}")
     
-    # Return the current track
+    # Return the current official track name
     return F1_2024_TRACKS[current_track_index]
 
 @app.get("/", response_class=HTMLResponse, tags=["UI"])
@@ -236,15 +236,18 @@ async def get_current_leaderboard_data():
         dict: Current track name, leaderboard data, and auto-cycle status
     """
     try:
-        # Get the current track to display
-        track_name = get_current_leaderboard_track()
+        # Get the current track to display (full official name)
+        official_track_name = get_current_leaderboard_track()
         
-        # Get the leaderboard data for the track
-        leaderboard_data = get_top_lap_times(track_name)
+        # Get the leaderboard data for the track using the official name
+        leaderboard_data = get_top_lap_times(official_track_name)
+
+        # Get the simplified display name for the frontend
+        display_track_name = F1_TRACK_DISPLAY_NAMES.get(official_track_name, official_track_name)
         
         # Return the current display data
         return {
-            "track_name": track_name,
+            "track_name": display_track_name, # Send the simplified name to frontend
             "leaderboard": leaderboard_data,
             "auto_cycle_enabled": auto_cycle_enabled
         }

@@ -10,70 +10,62 @@
     font-family: 'Arial', sans-serif;
 }
 
+/* === General Styles (for admin.html and base for others) === */
 body {
     background-color: #141414;
-    color: #ffffff;
+    color: #ffffff; /* Default white text */
     line-height: 1.6;
+    margin: 0;
+    padding: 0; 
 }
 
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
+.container { /* General container for layout, if admin uses it */
+    width: 100%;
+    max-width: 1200px; /* Optional: if admin page needs a max width */
+    margin: 0 auto;    /* Optional: for centering a max-width container */
+    padding: 20px;     /* Default padding */
+    box-sizing: border-box;
 }
 
-/* Header Styles */
 header {
-    text-align: center;
-    margin-bottom: 30px;
-    border-bottom: 2px solid #e10600; /* F1 red */
-    padding-bottom: 15px;
-}
-
-h1 {
-    font-size: 2.5rem;
+    background-color: #1e1e1e; /* Original darker header */
     color: #ffffff;
+    padding: 20px;
+    text-align: center;
+    border-bottom: 3px solid #e10600; /* Original F1 red accent */
+    position: relative; /* For potential logo if admin page uses one, but not positioned absolutely by default */
+    margin-bottom: 20px;
 }
 
-#track-name {
-    color: #e10600; /* F1 red */
+header h1 {
+    font-size: 2.5rem; /* Original larger size */
+    color: #ffffff;
+    padding-top: 20px; /* Standard padding */
+    margin:0;
+}
+
+#track-name { /* Primarily for leaderboard, but harmless */
+    color: #e10600; 
     font-weight: bold;
 }
 
-/* Cycle Status Indicator */
-#cycle-status-indicator {
-    margin: 10px auto;
-    padding: 5px 15px;
-    border-radius: 20px;
-    display: inline-block;
-    font-size: 0.9rem;
-    font-weight: bold;
-    text-transform: uppercase;
-}
 
-#cycle-status-indicator.cycling {
-    background-color: #00a336; /* Green for auto-cycling */
-    color: white;
-}
-
-#cycle-status-indicator.manual {
-    background-color: #0057b8; /* Blue for manual selection */
-    color: white;
-}
-
-/* Table Styles */
+/* General Table Styles for admin page */
 table {
     width: 100%;
     border-collapse: collapse;
     margin-bottom: 30px;
     background-color: #222222;
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    color: #ffffff; /* Ensure table text is white */
 }
 
 th, td {
-    padding: 15px;
+    padding: 15px; /* Original generous padding */
     text-align: left;
     border-bottom: 1px solid #444;
+    font-size: 1rem; /* Standard font size */
+    color: #ffffff; /* Ensure cell text is white */
 }
 
 th {
@@ -81,22 +73,23 @@ th {
     color: white;
     font-weight: bold;
     text-transform: uppercase;
+    font-size: 1.05rem; /* Slightly larger for headers */
 }
 
-tr:hover {
+tr:hover { /* General hover effect */
     background-color: #333333;
 }
 
-/* Highlight for the first place */
+/* Highlight for the first place - can be general if admin tables use it*/
 tr.first-place {
-    background-color: rgba(225, 6, 0, 0.2); /* Light red background */
+    background-color: rgba(225, 6, 0, 0.2);
 }
 
 tr.first-place:hover {
     background-color: rgba(225, 6, 0, 0.3);
 }
 
-/* Error and empty state styles */
+/* Error and empty state styles - can be general */
 tr.error td, tr.no-data td {
     text-align: center;
     padding: 30px 15px;
@@ -105,19 +98,130 @@ tr.error td, tr.no-data td {
 }
 
 tr.error td {
-    color: #e10600; /* F1 red */
+    color: #e10600;
 }
 
-/* Footer Styles */
 footer {
     text-align: center;
     margin-top: 30px;
     padding-top: 20px;
     border-top: 1px solid #444;
-    color: #999;
+    color: #999; /* Dimmer color for footer */
+    font-size: 0.9rem;
 }
 
-/* Responsive adjustments */
+/* === End of General Styles === */
+
+/* === Styles for Rotated Leaderboard View (OVERRIDE General Styles) === */
+
+/* body-leaderboard-rotated and its html parent (if possible to target) */
+.body-leaderboard-rotated html,
+.body-leaderboard-rotated {
+    overflow: hidden; 
+    height: 100%;
+    margin: 0;
+    color: #ffffff; 
+    background-color: #141414;
+}
+
+/* Styles specific to the rotated container */
+.body-leaderboard-rotated .container {
+    width: 100vh;
+    height: 100vw;
+    transform-origin: 0 0;
+    transform: rotate(90deg) translateY(-100vw);
+    background-color: #141414; /* Explicit for rotated view */
+    padding: 15px; /* Compacted padding for rotated view */
+    box-sizing: border-box;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    /* max-width and margin:auto are overridden by width/height for rotation */
+}
+
+.body-leaderboard-rotated header {
+    background-color: #141414;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-bottom: none; /* No border in rotated view */
+    width: 100%; /* Ensure it takes full width of its new parent */
+    box-sizing: border-box;
+    color: #ffffff;
+}
+
+.body-leaderboard-rotated #header-logo { /* This ID should be unique to leaderboard.html */
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    height: 75px; /* Changed from 40px */
+    width: auto;
+}
+
+.body-leaderboard-rotated header h1 {
+    font-size: 1.95rem; 
+    padding-top: 83px; /* Increased from 10px to create space below logo */
+    margin: 0;
+    color: #ffffff;
+}
+
+/* Remove cycle status indicator if it was re-added or general */
+.body-leaderboard-rotated #cycle-status-indicator { 
+    display: none; 
+}
+
+.body-leaderboard-rotated main {
+    flex-grow: 1;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.body-leaderboard-rotated table {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* From previous compaction */
+    background-color: #222222;
+    color: #ffffff;
+}
+
+.body-leaderboard-rotated th, .body-leaderboard-rotated td {
+    padding: 6px 8px; /* Compacted */
+    font-size: 1.1rem; /* Compacted then increased 30% for td */
+    color: #ffffff;
+}
+
+.body-leaderboard-rotated th {
+    font-size: 1.15rem; /* Compacted then increased 30% for th */
+    background-color: #e10600;
+    color: #ffffff;
+}
+
+.body-leaderboard-rotated tr:hover {
+    background-color: #333333; /* Keep hover effect */
+}
+
+.body-leaderboard-rotated tr.first-place {
+    background-color: rgba(225, 6, 0, 0.2);
+}
+
+.body-leaderboard-rotated tr.first-place:hover {
+    background-color: rgba(225, 6, 0, 0.3);
+}
+
+.body-leaderboard-rotated tr.error td, .body-leaderboard-rotated tr.no-data td {
+    /* Keep specific styles for these states if they look okay in portrait */
+}
+
+.body-leaderboard-rotated footer {
+    margin-top: 10px;
+    padding: 8px;
+    font-size: 0.95rem; /* Compacted then increased 30% */
+    border-top: 1px solid #444;
+    color: #999;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Responsive adjustments - keep commented out for now */
+/* 
 @media (max-width: 768px) {
     table {
         font-size: 14px;
@@ -131,3 +235,4 @@ footer {
         font-size: 1.8rem;
     }
 } 
+*/ 

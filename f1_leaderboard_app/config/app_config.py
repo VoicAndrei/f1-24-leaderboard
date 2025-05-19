@@ -30,6 +30,34 @@ F1_2024_TRACKS = [
     "Yas Marina Circuit"                  # Abu Dhabi
 ]
 
+# Simplified display names for tracks (Country/City)
+F1_TRACK_DISPLAY_NAMES = {
+    "Bahrain International Circuit": "Bahrain",
+    "Jeddah Corniche Circuit": "Saudi Arabia",
+    "Albert Park Circuit": "Australia",
+    "Suzuka International Racing Course": "Japan",
+    "Shanghai International Circuit": "China",
+    "Miami International Autodrome": "Miami",
+    "Autodromo Enzo e Dino Ferrari": "Imola",
+    "Circuit de Monaco": "Monaco",
+    "Circuit Gilles Villeneuve": "Canada",
+    "Circuit de Barcelona-Catalunya": "Spain",
+    "Red Bull Ring": "Austria",
+    "Silverstone Circuit": "Great Britain",
+    "Hungaroring": "Hungary",
+    "Circuit de Spa-Francorchamps": "Belgium",
+    "Circuit Zandvoort": "Netherlands",
+    "Autodromo Nazionale Monza": "Italy",
+    "Baku City Circuit": "Azerbaijan",
+    "Marina Bay Street Circuit": "Singapore",
+    "Circuit of the Americas": "USA",
+    "Autódromo Hermanos Rodríguez": "Mexico",
+    "Autódromo José Carlos Pace": "Brazil",
+    "Las Vegas Street Circuit": "Las Vegas",
+    "Losail International Circuit": "Qatar",
+    "Yas Marina Circuit": "Abu Dhabi"
+}
+
 # Map of track names to IDs based on the telemetry repository
 TRACK_ID_MAPPING = {
     "Bahrain International Circuit": 3,        # sakhir in track_dictionary
@@ -65,7 +93,7 @@ TELEMETRY_REPO_PATH = "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-applicat
 DATABASE_URL = "backend/database/f1_leaderboard.db"
 
 # API server configuration
-API_HOST = "localhost"
+API_HOST = "0.0.0.0"
 API_PORT = 8000
 
 # Auto cycle interval for leaderboard display (in seconds)

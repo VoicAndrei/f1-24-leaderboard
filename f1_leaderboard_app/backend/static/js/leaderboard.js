@@ -33,13 +33,6 @@ async function updateDisplay() {
         const trackNameElement = document.getElementById('track-name');
         trackNameElement.textContent = data.track_name;
         
-        // Update cycle status indicator if present
-        const cycleStatusIndicator = document.getElementById('cycle-status-indicator');
-        if (cycleStatusIndicator) {
-            cycleStatusIndicator.textContent = data.auto_cycle_enabled ? 'Auto-Cycling' : 'Manual Selection';
-            cycleStatusIndicator.className = data.auto_cycle_enabled ? 'cycling' : 'manual';
-        }
-        
         // Get the table body element
         const leaderboardBody = document.getElementById('leaderboard-body');
         

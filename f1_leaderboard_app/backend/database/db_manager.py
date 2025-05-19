@@ -219,13 +219,13 @@ def add_lap_time(rig_identifier, track_name, player_name, lap_time_ms):
         conn.close()
 
 
-def get_top_lap_times(track_name, limit=10):
+def get_top_lap_times(track_name, limit=20):
     """
     Get the top lap times for a specific track.
     
     Args:
         track_name (str): Name of the track
-        limit (int, optional): Maximum number of lap times to return. Defaults to 10.
+        limit (int, optional): Maximum number of lap times to return. Defaults to 20.
         
     Returns:
         list: List of dictionaries containing lap time information
