@@ -106,6 +106,56 @@
         .status-disabled {
             color: #e74c3c !important;
         }
+        
+        /* Timer-specific styles */
+        .timer-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-top: 0.5rem;
+        }
+        
+        .timer-input {
+            width: 80px !important;
+            padding: 0.3rem !important;
+            margin: 0 !important;
+        }
+        
+        .timer-button {
+            padding: 0.3rem 0.6rem !important;
+            font-size: 0.9rem !important;
+            margin: 0 !important;
+        }
+        
+        .timer-status {
+            font-size: 0.9rem;
+            font-weight: bold;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            margin-left: 0.5rem;
+        }
+        
+        .timer-active {
+            background-color: rgba(39, 174, 96, 0.2);
+            color: #2ecc71;
+        }
+        
+        .timer-inactive {
+            background-color: rgba(149, 165, 166, 0.2);
+            color: #95a5a6;
+        }
+        
+        .timer-countdown {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        
+        #timer-control-message {
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -151,23 +201,25 @@
             </section>
             
             <section class="admin-section">
-                <h2>Rig Player Assignments</h2>
+                <h2>Rig Player Assignments & Timer Control</h2>
                 <div class="table-container">
                     <table id="rigs-table">
                         <thead>
                             <tr>
                                 <th>Rig ID</th>
                                 <th>Player Name</th>
+                                <th>Timer Control</th>
                             </tr>
                         </thead>
                         <tbody id="rigs-table-body">
                             <!-- Rig assignments will be inserted here by JavaScript -->
                             <tr>
-                                <td colspan="2">Loading rig assignments...</td>
+                                <td colspan="3">Loading rig assignments...</td>
                             </tr>
                         </tbody>
                     </table>
                 </div>
+                <div id="timer-control-message" class="admin-message"></div>
             </section>
             
             <section class="admin-section">

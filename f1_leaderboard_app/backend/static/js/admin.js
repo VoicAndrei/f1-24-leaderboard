@@ -5,7 +5,11 @@
  * - Fetching and displaying current rig-player assignments
  * - Handling form submission to assign a player to a rig
  * - Leaderboard display control (track selection and auto-cycle toggle)
+ * - Timer control for each rig
  */
+
+// Global timer status cache
+let currentTimerStatuses = {};
 
 // Fetch and display rig assignments
 async function fetchRigAssignments() {
@@ -37,7 +41,7 @@ async function fetchRigAssignments() {
         if (rigs.length === 0) {
             tableBody.innerHTML = `
                 <tr>
-                    <td colspan="2">No rigs found. Please check the database setup.</td>
+                    <td colspan="3">No rigs found. Please check the database setup.</td>
                 </tr>
             `;
             return;
@@ -46,9 +50,21 @@ async function fetchRigAssignments() {
         // Add each rig to the table
         rigs.forEach(rig => {
             const row = document.createElement('tr');
+            
+            // Get timer status for this rig
+            const timerStatus = currentTimerStatuses[rig.rig_identifier] || {
+                timer_active: false,
+                remaining_time: 0,
+                duration_minutes: 0
+            };
+            
+            // Create timer control HTML
+            const timerControlHtml = createTimerControlHtml(rig.rig_identifier, timerStatus);
+            
             row.innerHTML = `
                 <td>${rig.rig_identifier}</td>
                 <td>${rig.current_player_name}</td>
+                <td>${timerControlHtml}</td>
             `;
             tableBody.appendChild(row);
             
@@ -58,6 +74,10 @@ async function fetchRigAssignments() {
             option.textContent = rig.rig_identifier;
             rigSelect.appendChild(option);
         });
+        
+        // Add event listeners for timer buttons
+        addTimerEventListeners();
+        
     } catch (error) {
         console.error('Error fetching rig assignments:', error);
         
@@ -65,13 +85,167 @@ async function fetchRigAssignments() {
         const tableBody = document.getElementById('rigs-table-body');
         tableBody.innerHTML = `
             <tr>
-                <td colspan="2" class="error">Error loading rig assignments. Please try again later.</td>
+                <td colspan="3" class="error">Error loading rig assignments. Please try again later.</td>
             </tr>
         `;
         
         // Display error message
         showMessage(`Error: ${error.message}`, false);
     }
+}
+
+// Create timer control HTML for a rig
+function createTimerControlHtml(rigId, timerStatus) {
+    if (timerStatus.timer_active) {
+        const remainingTime = formatTimerDisplay(timerStatus.remaining_time);
+        return `
+            <div class="timer-controls">
+                <span class="timer-status timer-active">Active: ${remainingTime}</span>
+                <button class="timer-button" onclick="stopTimer('${rigId}')">Stop</button>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="timer-controls">
+                <input type="number" class="timer-input" id="timer-input-${rigId}" 
+                       placeholder="10" min="0.1" step="0.1" value="10">
+                <span style="font-size: 0.9rem;">min</span>
+                <button class="timer-button" onclick="startTimer('${rigId}')">Start</button>
+                <span class="timer-status timer-inactive">Inactive</span>
+            </div>
+        `;
+    }
+}
+
+// Format timer display (seconds to MM:SS)
+function formatTimerDisplay(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Add event listeners for timer buttons
+function addTimerEventListeners() {
+    // Event listeners are added via onclick attributes in createTimerControlHtml
+    // This function is here for future expansion if needed
+}
+
+// Start timer for a specific rig
+async function startTimer(rigId) {
+    try {
+        // Get duration from input
+        const durationInput = document.getElementById(`timer-input-${rigId}`);
+        if (!durationInput) {
+            showTimerMessage(`Error: Could not find duration input for ${rigId}`, false);
+            return;
+        }
+        
+        const durationMinutes = parseFloat(durationInput.value);
+        if (!durationMinutes || durationMinutes <= 0) {
+            showTimerMessage(`Please enter a valid duration for ${rigId}`, false);
+            return;
+        }
+        
+        // Send start request
+        const response = await fetch('/api/admin/timer/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                rig_identifier: rigId,
+                duration_minutes: durationMinutes
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to start timer');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+        // Refresh timer status
+        fetchTimerStatus();
+        
+    } catch (error) {
+        console.error('Error starting timer:', error);
+        showTimerMessage(`Error starting timer for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Stop timer for a specific rig
+async function stopTimer(rigId) {
+    try {
+        const response = await fetch(`/api/admin/timer/stop/${rigId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to stop timer');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+        // Refresh timer status
+        fetchTimerStatus();
+        
+    } catch (error) {
+        console.error('Error stopping timer:', error);
+        showTimerMessage(`Error stopping timer for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Fetch timer status for all rigs
+async function fetchTimerStatus() {
+    try {
+        const response = await fetch('/api/admin/timer/status');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const timerStatuses = await response.json();
+        
+        // Update global status cache
+        currentTimerStatuses = {};
+        timerStatuses.forEach(status => {
+            currentTimerStatuses[status.rig_identifier] = status;
+        });
+        
+        // Refresh the rig assignments table to show updated timer status
+        fetchRigAssignments();
+        
+    } catch (error) {
+        console.error('Error fetching timer status:', error);
+    }
+}
+
+// Show message in the timer control message div
+function showTimerMessage(message, isSuccess) {
+    const messageDiv = document.getElementById('timer-control-message');
+    
+    // Set message text
+    messageDiv.textContent = message;
+    
+    // Remove existing classes
+    messageDiv.classList.remove('success', 'error');
+    
+    // Add appropriate class
+    if (isSuccess) {
+        messageDiv.classList.add('success');
+    } else {
+        messageDiv.classList.add('error');
+    }
+    
+    // Hide the message after 5 seconds
+    setTimeout(() => {
+        messageDiv.classList.remove('success', 'error');
+        messageDiv.textContent = '';
+    }, 5000);
 }
 
 // Handle form submission
@@ -347,6 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch initial display status
     fetchDisplayStatus();
     
+    // Fetch initial timer status
+    fetchTimerStatus();
+    
     // Add event listener for form submission
     const form = document.getElementById('assign-player-form');
     form.addEventListener('submit', assignPlayer);
@@ -357,4 +534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Auto-refresh display status every 5 seconds
     setInterval(fetchDisplayStatus, 5000);
+    
+    // Auto-refresh timer status every 2 seconds (more frequent for timer countdown)
+    setInterval(fetchTimerStatus, 2000);
 }); 

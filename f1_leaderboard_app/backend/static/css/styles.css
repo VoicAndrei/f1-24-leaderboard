@@ -129,7 +129,7 @@ footer {
     width: 100vh;
     height: 100vw;
     transform-origin: 0 0;
-    transform: rotate(90deg) translateY(-100vw);
+    transform: rotate(90deg) translateY(-75vw);
     background-color: #141414; /* Explicit for rotated view */
     padding: 15px; /* Compacted padding for rotated view */
     box-sizing: border-box;

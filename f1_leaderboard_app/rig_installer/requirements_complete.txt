@@ -1,0 +1,14 @@
+# F1 Leaderboard Rig - Complete Requirements
+# Includes dependencies for both timer client and telemetry listener
+
+# Timer Client Dependencies
+flask==2.3.3
+pydirectinput==1.0.4
+tkinter-tooltip==2.1.0
+
+# Telemetry Listener Dependencies  
+requests==2.31.0
+pydantic==2.4.2
+
+# Common Dependencies
+argparse  # Built-in, but ensuring compatibility 

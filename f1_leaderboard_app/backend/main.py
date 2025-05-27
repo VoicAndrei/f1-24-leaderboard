@@ -10,6 +10,8 @@ import os
 import sys
 import logging
 import time
+import threading
+import requests  # Added for communicating with rig timer clients
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import uvicorn
@@ -44,6 +46,11 @@ current_track_index = 0
 auto_cycle_enabled = True
 last_cycle_time = time.time()
 manual_track_selection = None
+
+# Timer state management (in-memory for now)
+# Structure: {rig_id: {"timer_active": bool, "remaining_time": int, "timer_thread": Thread}}
+rig_timer_states = {}
+timer_lock = threading.Lock()
 
 # Define Pydantic models for request and response data
 class LapTimeSubmit(BaseModel):
@@ -91,6 +98,22 @@ class TrackSelectRequest(BaseModel):
     Model for track selection request.
     """
     track_name: str = Field(..., description="Name of the track to display on the leaderboard")
+
+class TimerStartRequest(BaseModel):
+    """
+    Model for timer start request.
+    """
+    rig_identifier: str = Field(..., description="Unique identifier for the simulator rig (e.g., 'RIG1')")
+    duration_minutes: float = Field(..., description="Timer duration in minutes", gt=0)
+
+class TimerStatusResponse(BaseModel):
+    """
+    Model for timer status response.
+    """
+    rig_identifier: str
+    timer_active: bool
+    remaining_time: int = 0
+    duration_minutes: float = 0
 
 # Create FastAPI application
 app = FastAPI(
@@ -413,6 +436,203 @@ async def get_track_status():
     
     except Exception as e:
         logger.error(f"Error getting track status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===== TIMER API ENDPOINTS =====
+
+def send_timer_command_to_rig(rig_identifier: str, duration_seconds: int) -> bool:
+    """
+    Send a timer start command to a specific rig's timer client.
+    
+    Args:
+        rig_identifier: The rig identifier (e.g., 'RIG1')
+        duration_seconds: Timer duration in seconds
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # IP mapping for all rigs - Update these with actual static IPs assigned to each rig PC
+        rig_ip_mapping = {
+            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
+            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
+            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
+            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
+        }
+        
+        rig_ip = rig_ip_mapping.get(rig_identifier)
+        if not rig_ip:
+            logger.error(f"No IP mapping found for rig: {rig_identifier}")
+            return False
+        
+        url = f"http://{rig_ip}:5001/start_timer"
+        payload = {"duration": duration_seconds}
+        
+        response = requests.post(url, json=payload, timeout=5)
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("status") == "success":
+            logger.info(f"Timer started successfully on {rig_identifier}")
+            return True
+        else:
+            logger.error(f"Timer failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error communicating with {rig_identifier}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending timer command to {rig_identifier}: {e}")
+        return False
+
+@app.post("/api/admin/timer/start", tags=["Admin", "Timer"])
+async def start_rig_timer(timer_request: TimerStartRequest):
+    """
+    Start a timer for a specific rig.
+    
+    Args:
+        timer_request: Timer start request data
+        
+    Returns:
+        dict: Success message or error
+    """
+    global rig_timer_states, timer_lock
+    
+    try:
+        rig_id = timer_request.rig_identifier
+        duration_seconds = int(timer_request.duration_minutes * 60)
+        
+        # Check if timer is already active for this rig
+        with timer_lock:
+            if rig_id in rig_timer_states and rig_timer_states[rig_id].get("timer_active", False):
+                raise HTTPException(status_code=400, detail=f"Timer already active for {rig_id}")
+        
+        # Send command to rig's timer client
+        success = send_timer_command_to_rig(rig_id, duration_seconds)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail=f"Failed to start timer on {rig_id}. Is the timer client running?")
+        
+        # Update local state
+        with timer_lock:
+            rig_timer_states[rig_id] = {
+                "timer_active": True,
+                "remaining_time": duration_seconds,
+                "start_time": time.time(),
+                "duration_minutes": timer_request.duration_minutes
+            }
+        
+        logger.info(f"Timer started for {rig_id}: {timer_request.duration_minutes} minutes")
+        
+        return {
+            "success": True,
+            "message": f"Timer started for {rig_id} ({timer_request.duration_minutes} minutes)",
+            "rig_identifier": rig_id,
+            "duration_minutes": timer_request.duration_minutes
+        }
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error starting timer: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/admin/timer/status", response_model=List[TimerStatusResponse], tags=["Admin", "Timer"])
+async def get_all_timer_status():
+    """
+    Get timer status for all rigs.
+    
+    Returns:
+        list: Timer status for all rigs
+    """
+    global rig_timer_states, timer_lock
+    
+    try:
+        # Get all rig identifiers from the database
+        rigs = get_rig_assignments()
+        timer_statuses = []
+        
+        with timer_lock:
+            for rig in rigs:
+                rig_id = rig['rig_identifier']
+                
+                if rig_id in rig_timer_states:
+                    timer_state = rig_timer_states[rig_id]
+                    
+                    # Calculate remaining time
+                    if timer_state.get("timer_active", False):
+                        elapsed_time = time.time() - timer_state.get("start_time", 0)
+                        remaining_time = max(0, timer_state.get("remaining_time", 0) - int(elapsed_time))
+                        
+                        # Check if timer has expired
+                        if remaining_time <= 0:
+                            timer_state["timer_active"] = False
+                            remaining_time = 0
+                    else:
+                        remaining_time = 0
+                    
+                    timer_statuses.append(TimerStatusResponse(
+                        rig_identifier=rig_id,
+                        timer_active=timer_state.get("timer_active", False),
+                        remaining_time=remaining_time,
+                        duration_minutes=timer_state.get("duration_minutes", 0)
+                    ))
+                else:
+                    # No timer state for this rig
+                    timer_statuses.append(TimerStatusResponse(
+                        rig_identifier=rig_id,
+                        timer_active=False,
+                        remaining_time=0,
+                        duration_minutes=0
+                    ))
+        
+        return timer_statuses
+    
+    except Exception as e:
+        logger.error(f"Error getting timer status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/admin/timer/stop/{rig_identifier}", tags=["Admin", "Timer"])
+async def stop_rig_timer(rig_identifier: str):
+    """
+    Stop a timer for a specific rig.
+    
+    Args:
+        rig_identifier: Unique identifier for the rig (e.g., 'RIG1')
+        
+    Returns:
+        dict: Success message or error
+    """
+    global rig_timer_states, timer_lock
+    
+    try:
+        with timer_lock:
+            if rig_identifier not in rig_timer_states:
+                raise HTTPException(status_code=404, detail=f"No timer found for {rig_identifier}")
+            
+            timer_state = rig_timer_states[rig_identifier]
+            if not timer_state.get("timer_active", False):
+                raise HTTPException(status_code=400, detail=f"No active timer for {rig_identifier}")
+            
+            # Stop the timer
+            timer_state["timer_active"] = False
+            timer_state["remaining_time"] = 0
+        
+        logger.info(f"Timer stopped for {rig_identifier}")
+        
+        return {
+            "success": True,
+            "message": f"Timer stopped for {rig_identifier}",
+            "rig_identifier": rig_identifier
+        }
+    
+    except HTTPException:
+        raise
+    
+    except Exception as e:
+        logger.error(f"Error stopping timer: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 def format_lap_time(milliseconds):
