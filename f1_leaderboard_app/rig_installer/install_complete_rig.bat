@@ -97,33 +97,69 @@ if exist "%USERPROFILE%\Documents\f1-24-telemetry-application" (
     echo F1 telemetry repository found at: %USERPROFILE%\Documents\f1-24-telemetry-application
     set TELEMETRY_FOUND=true
 )
+REM Check relative to installer location
+if exist "%INSTALLER_DIR%..\f1-24-telemetry-application" (
+    echo F1 telemetry repository found at: %INSTALLER_DIR%..\f1-24-telemetry-application
+    set TELEMETRY_FOUND=true
+)
 
 if "%TELEMETRY_FOUND%"=="true" (
     echo F1 telemetry repository found - Good!
 ) else (
     echo WARNING: F1 telemetry repository not found in common locations.
     echo.
-    echo For lap time capture to work, you need the F1 telemetry repository:
+    echo For lap time capture to work, you need the F1 telemetry repository.
     echo.
-    echo OPTION 1 - Download and extract manually:
-    echo 1. Go to https://github.com/eSl31RoseBr/f1-24-telemetry
+    echo OPTION 1 - Auto-download ^(Recommended^):
+    echo The installer can download it for you automatically.
+    echo.
+    echo OPTION 2 - Manual download:
+    echo 1. Go to https://github.com/Fredrik2002/f1-24-telemetry-application
     echo 2. Click "Code" ^> "Download ZIP"
     echo 3. Extract to C:\f1-24-telemetry-application
-    echo.
-    echo OPTION 2 - Use existing installation:
-    echo If you already have it, update app_config.py with the correct path
     echo.
     echo OPTION 3 - Timer only:
     echo Continue without telemetry - timer will work but no lap times captured
     echo.
-    set /p CONTINUE="Continue installation? (y/n): "
-    if /i not "%CONTINUE%"=="y" (
-        echo Installation cancelled. Please set up the telemetry repository first.
-        pause
-        exit /b 1
+    set /p AUTO_DOWNLOAD="Auto-download F1 telemetry repository now? (y/n): "
+    if /i "%AUTO_DOWNLOAD%"=="y" (
+        echo.
+        echo Downloading F1 telemetry repository...
+        echo This may take a few minutes depending on your internet connection.
+        echo.
+        
+        REM Download using PowerShell
+        powershell -Command "& {Invoke-WebRequest -Uri 'https://github.com/Fredrik2002/f1-24-telemetry-application/archive/refs/heads/main.zip' -OutFile 'f1-telemetry.zip'}"
+        
+        if exist "f1-telemetry.zip" (
+            echo Download completed. Extracting...
+            powershell -Command "& {Expand-Archive -Path 'f1-telemetry.zip' -DestinationPath '.' -Force}"
+            
+            if exist "f1-24-telemetry-application-main" (
+                move "f1-24-telemetry-application-main" "C:\f1-24-telemetry-application"
+                del "f1-telemetry.zip"
+                echo F1 telemetry repository installed successfully!
+                set TELEMETRY_FOUND=true
+            ) else (
+                echo Error: Failed to extract F1 telemetry repository.
+                del "f1-telemetry.zip" 2>nul
+            )
+        ) else (
+            echo Error: Failed to download F1 telemetry repository.
+            echo Please check your internet connection and try manual download.
+        )
     )
-    echo.
-    echo Continuing with timer-only installation...
+    
+    if "%TELEMETRY_FOUND%"=="false" (
+        set /p CONTINUE="Continue installation without telemetry? (y/n): "
+        if /i not "%CONTINUE%"=="y" (
+            echo Installation cancelled. Please set up the telemetry repository first.
+            pause
+            exit /b 1
+        )
+        echo.
+        echo Continuing with timer-only installation...
+    )
 )
 
 REM Get the RIG ID from user input

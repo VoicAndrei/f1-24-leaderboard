@@ -91,12 +91,13 @@ import os
 
 # Common locations where the F1 telemetry repository might be installed
 _POSSIBLE_TELEMETRY_PATHS = [
+    "C:/f1-24-telemetry-application",         # Auto-downloaded location
     "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application",
     "C:/F1Telemetry/f1-24-telemetry-application", 
-    "C:/f1-24-telemetry-application",
     "D:/f1-24-telemetry-application",
     os.path.join(os.path.expanduser("~"), "Desktop", "f1-24-telemetry-application"),
     os.path.join(os.path.expanduser("~"), "Documents", "f1-24-telemetry-application"),
+    os.path.join(os.path.dirname(__file__), "..", "f1-24-telemetry-application"),  # Relative to installer
 ]
 
 # Find the first existing telemetry repository path
