@@ -50,8 +50,9 @@ async function fetchRigAssignments() {
         // Add each rig to the table
         rigs.forEach(rig => {
             const row = document.createElement('tr');
+            row.id = `rig-row-${rig.rig_identifier}`; // Optional: ID for the whole row
             
-            // Get timer status for this rig
+            // Get timer status for this rig (from global cache, might be stale initially but fetchTimerStatus will update)
             const timerStatus = currentTimerStatuses[rig.rig_identifier] || {
                 timer_active: false,
                 remaining_time: 0,
@@ -59,12 +60,12 @@ async function fetchRigAssignments() {
             };
             
             // Create timer control HTML
-            const timerControlHtml = createTimerControlHtml(rig.rig_identifier, timerStatus);
+            const timerControlHtmlContent = createTimerControlHtml(rig.rig_identifier, timerStatus);
             
             row.innerHTML = `
                 <td>${rig.rig_identifier}</td>
                 <td>${rig.current_player_name}</td>
-                <td>${timerControlHtml}</td>
+                <td id="timer-cell-${rig.rig_identifier}">${timerControlHtmlContent}</td>
             `;
             tableBody.appendChild(row);
             
@@ -75,7 +76,7 @@ async function fetchRigAssignments() {
             rigSelect.appendChild(option);
         });
         
-        // Add event listeners for timer buttons
+        // Add event listeners for timer buttons (still relevant if controls are recreated)
         addTimerEventListeners();
         
     } catch (error) {
@@ -102,16 +103,27 @@ function createTimerControlHtml(rigId, timerStatus) {
             <div class="timer-controls">
                 <span class="timer-status timer-active">Active: ${remainingTime}</span>
                 <button class="timer-button" onclick="stopTimer('${rigId}')">Stop</button>
+                <button class="timer-button" onclick="resetTimer('${rigId}')" style="background-color: #ffa500;">Reset</button>
+                <br style="margin: 4px 0;">
+                <button class="timer-button" onclick="showOverlay('${rigId}')" style="background-color: #dc3545;">Show Overlay</button>
+                <button class="timer-button" onclick="dismissOverlay('${rigId}')" style="background-color: #ff6b35;">Dismiss Overlay</button>
+                <br style="margin: 4px 0;">
+                <button class="timer-button" onclick="pressEsc('${rigId}')" style="background-color: #6c757d;">Press ESC</button>
             </div>
         `;
     } else {
         return `
             <div class="timer-controls">
                 <input type="number" class="timer-input" id="timer-input-${rigId}" 
-                       placeholder="10" min="0.1" step="0.1" value="10">
+                       placeholder="10" min="1" step="1" value="10">
                 <span style="font-size: 0.9rem;">min</span>
                 <button class="timer-button" onclick="startTimer('${rigId}')">Start</button>
                 <span class="timer-status timer-inactive">Inactive</span>
+                <br style="margin: 4px 0;">
+                <button class="timer-button" onclick="showOverlay('${rigId}')" style="background-color: #dc3545;">Show Overlay</button>
+                <button class="timer-button" onclick="dismissOverlay('${rigId}')" style="background-color: #ff6b35;">Dismiss Overlay</button>
+                <br style="margin: 4px 0;">
+                <button class="timer-button" onclick="pressEsc('${rigId}')" style="background-color: #6c757d;">Press ESC</button>
             </div>
         `;
     }
@@ -205,22 +217,54 @@ async function fetchTimerStatus() {
         const response = await fetch('/api/admin/timer/status');
         
         if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
+            console.error(`HTTP error fetching timer status: ${response.status}`);
+            // Optionally show an error message to the user here
+            return;
         }
         
         const timerStatuses = await response.json();
         
-        // Update global status cache
-        currentTimerStatuses = {};
+        // Update global status cache and selectively update the DOM
         timerStatuses.forEach(status => {
-            currentTimerStatuses[status.rig_identifier] = status;
+            currentTimerStatuses[status.rig_identifier] = status; // Update cache
+
+            const rigId = status.rig_identifier;
+            const timerCell = document.getElementById(`timer-cell-${rigId}`);
+            
+            if (!timerCell) {
+                // This might happen if rigs are added/removed dynamically and fetchRigAssignments hasn't run yet
+                // For now, we'll just log it. A more robust solution might re-trigger fetchRigAssignments here.
+                console.warn(`Timer cell for ${rigId} not found in DOM during status update.`);
+                return; 
+            }
+
+            // Generate the HTML that *would* be there based on the new status
+            const newHtmlForCell = createTimerControlHtml(rigId, status);
+
+            if (status.timer_active) {
+                // New status is ACTIVE.
+                // The active display has no user input, so it's safe to update if different.
+                if (timerCell.innerHTML !== newHtmlForCell) {
+                    timerCell.innerHTML = newHtmlForCell;
+                }
+            } else {
+                // New status is INACTIVE. The cell should show the input field.
+                const existingInput = timerCell.querySelector('input.timer-input');
+                if (existingInput) {
+                    // Input field already exists. Timer was and remains inactive.
+                    // DO NOTHING to preserve the input field's current value and focus.
+                    // The "Inactive" text is static and doesn't need updating.
+                } else {
+                    // No input field exists (e.g., timer was active and now inactive, or cell was empty/malformed).
+                    // Render the inactive state, which includes the input field.
+                    timerCell.innerHTML = newHtmlForCell;
+                }
+            }
         });
         
-        // Refresh the rig assignments table to show updated timer status
-        fetchRigAssignments();
-        
     } catch (error) {
-        console.error('Error fetching timer status:', error);
+        console.error('Error fetching or processing timer status:', error);
+        // Optionally show an error to the user
     }
 }
 
@@ -510,31 +554,128 @@ function showMessage(message, isSuccess) {
     }, 5000);
 }
 
-// Initialize admin panel
+// Dismiss overlay for a specific rig
+async function dismissOverlay(rigId) {
+    try {
+        const response = await fetch(`/api/admin/overlay/dismiss/${rigId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to dismiss overlay');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+    } catch (error) {
+        console.error('Error dismissing overlay:', error);
+        showTimerMessage(`Error dismissing overlay for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Show overlay for a specific rig
+async function showOverlay(rigId) {
+    try {
+        const response = await fetch(`/api/admin/overlay/show/${rigId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to show overlay');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+    } catch (error) {
+        console.error('Error showing overlay:', error);
+        showTimerMessage(`Error showing overlay for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Reset timer for a specific rig
+async function resetTimer(rigId) {
+    try {
+        const response = await fetch(`/api/admin/timer/reset/${rigId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to reset timer');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+        // Refresh timer status to show updated state
+        fetchTimerStatus();
+        
+    } catch (error) {
+        console.error('Error resetting timer:', error);
+        showTimerMessage(`Error resetting timer for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Press ESC key for a specific rig
+async function pressEsc(rigId) {
+    try {
+        const response = await fetch(`/api/admin/esc/${rigId}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.detail || 'Failed to press ESC');
+        }
+        
+        showTimerMessage(result.message, true);
+        
+    } catch (error) {
+        console.error('Error pressing ESC:', error);
+        showTimerMessage(`Error pressing ESC for ${rigId}: ${error.message}`, false);
+    }
+}
+
+// Event listener for DOMContentLoaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Fetch initial rig assignments
+    // Fetch and display rig assignments initially
     fetchRigAssignments();
     
     // Populate track select dropdown
     populateTrackSelectDropdown();
     
-    // Fetch initial display status
+    // Fetch and display leaderboard status initially
     fetchDisplayStatus();
     
-    // Fetch initial timer status
-    fetchTimerStatus();
+    // Set up interval to refresh display status (e.g., every 10 seconds)
+    setInterval(fetchDisplayStatus, 10000); // Poll every 10 seconds
     
-    // Add event listener for form submission
+    // Set up interval to refresh timer status (e.g., every 5 seconds)
+    setInterval(fetchTimerStatus, 5000); // Poll every 5 seconds for timer status
+    
+    // Attach event listener to the form
     const form = document.getElementById('assign-player-form');
-    form.addEventListener('submit', assignPlayer);
+    if (form) {
+        form.addEventListener('submit', assignPlayer);
+    }
     
-    // Add event listeners for track control
-    document.getElementById('set-track-button').addEventListener('click', setDisplayTrack);
-    document.getElementById('toggle-autocycle-button').addEventListener('click', toggleAutoCycle);
+    // Attach event listener to manual track selection button
+    const manualTrackButton = document.getElementById('set-track-button');
+    if (manualTrackButton) {
+        manualTrackButton.addEventListener('click', setDisplayTrack);
+    }
     
-    // Auto-refresh display status every 5 seconds
-    setInterval(fetchDisplayStatus, 5000);
+    // Attach event listener to auto-cycle toggle button
+    const toggleAutoCycleButton = document.getElementById('toggle-autocycle-button');
+    if (toggleAutoCycleButton) {
+        toggleAutoCycleButton.addEventListener('click', toggleAutoCycle);
+    }
     
-    // Auto-refresh timer status every 2 seconds (more frequent for timer countdown)
-    setInterval(fetchTimerStatus, 2000);
+    // Fetch timer statuses initially
+    fetchTimerStatus();
 }); 

@@ -440,13 +440,14 @@ async def get_track_status():
 
 # ===== TIMER API ENDPOINTS =====
 
-def send_timer_command_to_rig(rig_identifier: str, duration_seconds: int) -> bool:
+def send_timer_command_to_rig(rig_identifier: str, action: str, duration_seconds: Optional[int] = None) -> bool:
     """
-    Send a timer start command to a specific rig's timer client.
+    Send a timer command (start or stop) to a specific rig's timer client.
     
     Args:
         rig_identifier: The rig identifier (e.g., 'RIG1')
-        duration_seconds: Timer duration in seconds
+        action: The command to send ('start' or 'stop')
+        duration_seconds: Timer duration in seconds (only for 'start' action)
         
     Returns:
         bool: True if successful, False otherwise
@@ -465,25 +466,36 @@ def send_timer_command_to_rig(rig_identifier: str, duration_seconds: int) -> boo
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
         
-        url = f"http://{rig_ip}:5001/start_timer"
-        payload = {"duration": duration_seconds}
-        
-        response = requests.post(url, json=payload, timeout=5)
+        if action == "start":
+            if duration_seconds is None:
+                logger.error(f"Duration must be provided for start action on {rig_identifier}")
+                return False
+            url = f"http://{rig_ip}:5001/start_timer"
+            payload = {"duration": duration_seconds}
+            response = requests.post(url, json=payload, timeout=5)
+        elif action == "stop":
+            url = f"http://{rig_ip}:5001/stop_timer"
+            # No payload needed for stop, but sending an empty JSON for consistency if client expects it
+            response = requests.post(url, json={}, timeout=5) 
+        else:
+            logger.error(f"Invalid timer action: {action} for {rig_identifier}")
+            return False
+            
         response.raise_for_status()
         
         result = response.json()
         if result.get("status") == "success":
-            logger.info(f"Timer started successfully on {rig_identifier}")
+            logger.info(f"Timer {action} command successful on {rig_identifier}")
             return True
         else:
-            logger.error(f"Timer failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
+            logger.error(f"Timer {action} command failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
             return False
             
     except requests.exceptions.RequestException as e:
-        logger.error(f"Network error communicating with {rig_identifier}: {e}")
+        logger.error(f"Network error communicating with {rig_identifier} for action {action}: {e}")
         return False
     except Exception as e:
-        logger.error(f"Error sending timer command to {rig_identifier}: {e}")
+        logger.error(f"Error sending timer {action} command to {rig_identifier}: {e}")
         return False
 
 @app.post("/api/admin/timer/start", tags=["Admin", "Timer"])
@@ -499,141 +511,351 @@ async def start_rig_timer(timer_request: TimerStartRequest):
     """
     global rig_timer_states, timer_lock
     
-    try:
-        rig_id = timer_request.rig_identifier
-        duration_seconds = int(timer_request.duration_minutes * 60)
-        
-        # Check if timer is already active for this rig
-        with timer_lock:
-            if rig_id in rig_timer_states and rig_timer_states[rig_id].get("timer_active", False):
-                raise HTTPException(status_code=400, detail=f"Timer already active for {rig_id}")
-        
-        # Send command to rig's timer client
-        success = send_timer_command_to_rig(rig_id, duration_seconds)
-        
-        if not success:
-            raise HTTPException(status_code=500, detail=f"Failed to start timer on {rig_id}. Is the timer client running?")
-        
-        # Update local state
-        with timer_lock:
+    rig_id = timer_request.rig_identifier
+    duration_minutes = timer_request.duration_minutes
+    duration_seconds = int(duration_minutes * 60)
+
+    with timer_lock:
+        if rig_id in rig_timer_states and rig_timer_states[rig_id].get("timer_active", False):
+            # Check if the rig client also thinks a timer is active.
+            # This local check might be out of sync if backend restarted.
+            # Best to rely on the command to the rig.
+            logger.warning(f"Backend thinks timer is already active for {rig_id}. Attempting to start new one.")
+            # Proceed to send command, rig client should handle overlapping timers if necessary
+            # or we can decide to explicitly stop first. For now, let start command override.
+
+        # Send command to rig client
+        if send_timer_command_to_rig(rig_id, "start", duration_seconds):
+            # If rig client confirms start, update backend state
+            if rig_id in rig_timer_states and rig_timer_states[rig_id].get("timer_thread"):
+                # If an old thread exists for this rig (e.g. from a previous run without clean stop)
+                # it's a bit tricky. The old thread might still be running.
+                # For now, we overwrite, assuming the new timer on the rig is the source of truth.
+                # A more robust solution might involve ensuring old threads are properly joined or signalled.
+                logger.info(f"Overwriting existing timer thread info for {rig_id} due to new start command.")
+
+            # Define the timer countdown logic for backend state (primarily for status endpoint)
+            def timer_countdown():
+                current_remaining = duration_seconds
+                while current_remaining > 0:
+                    with timer_lock:
+                        if not rig_timer_states.get(rig_id, {}).get("timer_active", False):
+                            logger.info(f"Timer for {rig_id} was stopped or cleared. Exiting backend countdown thread.")
+                            break 
+                        rig_timer_states[rig_id]["remaining_time"] = current_remaining
+                    time.sleep(1)
+                    current_remaining -= 1
+                
+                # Timer finished or was stopped
+                with timer_lock:
+                    if rig_id in rig_timer_states and rig_timer_states[rig_id].get("timer_active", False): # ensure it wasn't stopped by another call
+                        rig_timer_states[rig_id]["timer_active"] = False
+                        rig_timer_states[rig_id]["remaining_time"] = 0
+                        logger.info(f"Backend timer countdown finished for {rig_id}")
+                    # Note: We don't clear the timer_thread here, it just exits.
+
+            thread = threading.Thread(target=timer_countdown, daemon=True)
             rig_timer_states[rig_id] = {
                 "timer_active": True,
                 "remaining_time": duration_seconds,
-                "start_time": time.time(),
-                "duration_minutes": timer_request.duration_minutes
+                "duration_minutes": duration_minutes, # Store original requested duration
+                "timer_thread": thread # Store thread for potential future management
             }
-        
-        logger.info(f"Timer started for {rig_id}: {timer_request.duration_minutes} minutes")
-        
-        return {
-            "success": True,
-            "message": f"Timer started for {rig_id} ({timer_request.duration_minutes} minutes)",
-            "rig_identifier": rig_id,
-            "duration_minutes": timer_request.duration_minutes
-        }
-    
-    except HTTPException:
-        raise
-    
-    except Exception as e:
-        logger.error(f"Error starting timer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            thread.start()
+            logger.info(f"Timer started for {rig_id} with duration {duration_minutes} minutes by admin.")
+            return {"message": f"Timer started for {rig_id} ({duration_minutes} min)", "status": "success"}
+        else:
+            # Rig client failed to start the timer
+            # Ensure local state reflects this
+            if rig_id in rig_timer_states:
+                 rig_timer_states[rig_id]["timer_active"] = False
+                 rig_timer_states[rig_id]["remaining_time"] = 0
+            logger.error(f"Failed to start timer on rig client for {rig_id}")
+            raise HTTPException(status_code=500, detail=f"Failed to start timer on rig {rig_id}. Rig client might be offline or unresponsive.")
 
 @app.get("/api/admin/timer/status", response_model=List[TimerStatusResponse], tags=["Admin", "Timer"])
 async def get_all_timer_status():
     """
-    Get timer status for all rigs.
-    
-    Returns:
-        list: Timer status for all rigs
+    Get the status of all rig timers.
     """
     global rig_timer_states, timer_lock
+    statuses = []
     
+    # It's better to get rig assignments from DB to ensure we cover all configured rigs
     try:
-        # Get all rig identifiers from the database
-        rigs = get_rig_assignments()
-        timer_statuses = []
-        
-        with timer_lock:
-            for rig in rigs:
-                rig_id = rig['rig_identifier']
-                
-                if rig_id in rig_timer_states:
-                    timer_state = rig_timer_states[rig_id]
-                    
-                    # Calculate remaining time
-                    if timer_state.get("timer_active", False):
-                        elapsed_time = time.time() - timer_state.get("start_time", 0)
-                        remaining_time = max(0, timer_state.get("remaining_time", 0) - int(elapsed_time))
-                        
-                        # Check if timer has expired
-                        if remaining_time <= 0:
-                            timer_state["timer_active"] = False
-                            remaining_time = 0
-                    else:
-                        remaining_time = 0
-                    
-                    timer_statuses.append(TimerStatusResponse(
-                        rig_identifier=rig_id,
-                        timer_active=timer_state.get("timer_active", False),
-                        remaining_time=remaining_time,
-                        duration_minutes=timer_state.get("duration_minutes", 0)
-                    ))
-                else:
-                    # No timer state for this rig
-                    timer_statuses.append(TimerStatusResponse(
-                        rig_identifier=rig_id,
-                        timer_active=False,
-                        remaining_time=0,
-                        duration_minutes=0
-                    ))
-        
-        return timer_statuses
-    
+        rig_assignments = get_rig_assignments() 
+        all_rig_ids = [rig.rig_identifier for rig in rig_assignments]
     except Exception as e:
-        logger.error(f"Error getting timer status: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Could not fetch rig assignments for timer status: {e}. Falling back to timer_states keys.")
+        all_rig_ids = list(rig_timer_states.keys())
+
+
+    with timer_lock:
+        for rig_id in all_rig_ids: # Iterate over known rigs
+            state = rig_timer_states.get(rig_id)
+            if state and state.get("timer_active", False):
+                statuses.append(TimerStatusResponse(
+                    rig_identifier=rig_id,
+                    timer_active=True,
+                    remaining_time=state.get("remaining_time", 0),
+                    duration_minutes=state.get("duration_minutes", 0)
+                ))
+            else:
+                 # If not in active states, or explicitly inactive
+                statuses.append(TimerStatusResponse(
+                    rig_identifier=rig_id,
+                    timer_active=False,
+                    remaining_time=0,
+                    duration_minutes=rig_timer_states.get(rig_id, {}).get("duration_minutes", 0) # show last duration if available
+                ))
+    return statuses
 
 @app.post("/api/admin/timer/stop/{rig_identifier}", tags=["Admin", "Timer"])
 async def stop_rig_timer(rig_identifier: str):
     """
-    Stop a timer for a specific rig.
-    
-    Args:
-        rig_identifier: Unique identifier for the rig (e.g., 'RIG1')
-        
-    Returns:
-        dict: Success message or error
+    Stop the timer for a specific rig.
     """
     global rig_timer_states, timer_lock
     
-    try:
+    logger.info(f"Attempting to stop timer for rig: {rig_identifier}")
+
+    # Send command to rig client to stop its timer
+    if send_timer_command_to_rig(rig_identifier, "stop"):
+        # If rig client confirms stop, update backend state
         with timer_lock:
-            if rig_identifier not in rig_timer_states:
-                raise HTTPException(status_code=404, detail=f"No timer found for {rig_identifier}")
-            
-            timer_state = rig_timer_states[rig_identifier]
-            if not timer_state.get("timer_active", False):
-                raise HTTPException(status_code=400, detail=f"No active timer for {rig_identifier}")
-            
-            # Stop the timer
-            timer_state["timer_active"] = False
-            timer_state["remaining_time"] = 0
+            if rig_identifier in rig_timer_states:
+                rig_timer_states[rig_identifier]["timer_active"] = False
+                rig_timer_states[rig_identifier]["remaining_time"] = 0
+                # We don't need to explicitly stop the backend thread here, 
+                # it should check the 'timer_active' flag and exit.
+                logger.info(f"Timer stop command sent successfully to {rig_identifier}. Backend state updated.")
+                return {"message": f"Timer stop command sent to {rig_identifier}", "status": "success"}
+            else:
+                # Rig wasn't in backend state, but stop command was sent.
+                logger.info(f"Timer stop command sent to {rig_identifier} (rig not in active backend state).")
+                return {"message": f"Timer stop command sent to {rig_identifier} (rig was not in active backend state).", "status": "success"}
+
+    else:
+        # Rig client failed to stop the timer or didn't respond
+        logger.error(f"Failed to send stop timer command to rig client for {rig_identifier}")
+        # Even if the command fails, we should probably mark it as inactive in the backend
+        # to prevent the admin UI from thinking it's still running if the rig is offline.
+        # However, this could lead to a mismatch if the rig is online but the stop command failed for another reason.
+        # For now, let's return an error and not change backend state if rig communication fails.
+        raise HTTPException(status_code=500, detail=f"Failed to stop timer on rig {rig_identifier}. Rig client might be offline or unresponsive.")
+
+@app.post("/api/admin/overlay/dismiss/{rig_identifier}", tags=["Admin", "Overlay"])
+async def dismiss_rig_overlay(rig_identifier: str):
+    """
+    Dismiss the company overlay for a specific rig.
+    """
+    logger.info(f"Attempting to dismiss overlay for rig: {rig_identifier}")
+
+    # Send command to rig client to dismiss its overlay
+    if send_overlay_dismiss_command_to_rig(rig_identifier):
+        logger.info(f"Overlay dismiss command sent successfully to {rig_identifier}")
+        return {"message": f"Overlay dismiss command sent to {rig_identifier}", "status": "success"}
+    else:
+        # Rig client failed to dismiss the overlay or didn't respond
+        logger.error(f"Failed to send dismiss overlay command to rig client for {rig_identifier}")
+        raise HTTPException(status_code=500, detail=f"Failed to dismiss overlay on rig {rig_identifier}. Rig client might be offline or unresponsive.")
+
+@app.post("/api/admin/overlay/show/{rig_identifier}", tags=["Admin", "Overlay"])
+async def show_rig_overlay(rig_identifier: str):
+    """
+    Show the company overlay for a specific rig (manual session end).
+    """
+    logger.info(f"Attempting to show overlay for rig: {rig_identifier}")
+
+    # Send command to rig client to show its overlay
+    if send_overlay_show_command_to_rig(rig_identifier):
+        logger.info(f"Overlay show command sent successfully to {rig_identifier}")
+        return {"message": f"Overlay show command sent to {rig_identifier}", "status": "success"}
+    else:
+        # Rig client failed to show the overlay or didn't respond
+        logger.error(f"Failed to send show overlay command to rig client for {rig_identifier}")
+        raise HTTPException(status_code=500, detail=f"Failed to show overlay on rig {rig_identifier}. Rig client might be offline or unresponsive.")
+
+@app.post("/api/admin/timer/reset/{rig_identifier}", tags=["Admin", "Timer"])
+async def reset_rig_timer(rig_identifier: str):
+    """
+    Reset the timer for a specific rig (stop and clear to inactive state).
+    """
+    global rig_timer_states, timer_lock
+    
+    logger.info(f"Attempting to reset timer for rig: {rig_identifier}")
+
+    # Send stop command to rig client first
+    if send_timer_command_to_rig(rig_identifier, "stop"):
+        # Reset backend state
+        with timer_lock:
+            if rig_identifier in rig_timer_states:
+                rig_timer_states[rig_identifier]["timer_active"] = False
+                rig_timer_states[rig_identifier]["remaining_time"] = 0
+                rig_timer_states[rig_identifier]["duration_minutes"] = 0
+                logger.info(f"Timer reset successfully for {rig_identifier}. Backend state cleared.")
+            else:
+                logger.info(f"Timer reset for {rig_identifier} (rig not in active backend state).")
+                
+        return {"message": f"Timer reset for {rig_identifier}", "status": "success"}
+    else:
+        # Rig client failed to stop the timer or didn't respond
+        logger.error(f"Failed to send reset timer command to rig client for {rig_identifier}")
+        # Still reset backend state in case rig is offline
+        with timer_lock:
+            if rig_identifier in rig_timer_states:
+                rig_timer_states[rig_identifier]["timer_active"] = False
+                rig_timer_states[rig_identifier]["remaining_time"] = 0
+                rig_timer_states[rig_identifier]["duration_minutes"] = 0
+        raise HTTPException(status_code=500, detail=f"Failed to reset timer on rig {rig_identifier}. Rig client might be offline. Backend state cleared.")
+
+@app.post("/api/admin/esc/{rig_identifier}", tags=["Admin", "Utility"])
+async def press_esc_rig(rig_identifier: str):
+    """
+    Press ESC key on a specific rig (utility function).
+    """
+    logger.info(f"Attempting to press ESC on rig: {rig_identifier}")
+
+    # Send command to rig client to press ESC
+    if send_esc_command_to_rig(rig_identifier):
+        logger.info(f"ESC command sent successfully to {rig_identifier}")
+        return {"message": f"ESC key pressed on {rig_identifier}", "status": "success"}
+    else:
+        # Rig client failed to press ESC or didn't respond
+        logger.error(f"Failed to send ESC command to rig client for {rig_identifier}")
+        raise HTTPException(status_code=500, detail=f"Failed to press ESC on rig {rig_identifier}. Rig client might be offline or unresponsive.")
+
+def send_esc_command_to_rig(rig_identifier: str) -> bool:
+    """
+    Send an ESC key press command to a specific rig's timer client.
+    
+    Args:
+        rig_identifier: The rig identifier (e.g., 'RIG1')
         
-        logger.info(f"Timer stopped for {rig_identifier}")
-        
-        return {
-            "success": True,
-            "message": f"Timer stopped for {rig_identifier}",
-            "rig_identifier": rig_identifier
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # IP mapping for all rigs - same as timer commands
+        rig_ip_mapping = {
+            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
+            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
+            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
+            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
         }
-    
-    except HTTPException:
-        raise
-    
+        
+        rig_ip = rig_ip_mapping.get(rig_identifier)
+        if not rig_ip:
+            logger.error(f"No IP mapping found for rig: {rig_identifier}")
+            return False
+        
+        url = f"http://{rig_ip}:5001/press_esc"
+        response = requests.post(url, json={}, timeout=5) 
+            
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("status") == "success":
+            logger.info(f"ESC command successful on {rig_identifier}")
+            return True
+        else:
+            logger.error(f"ESC command failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error communicating with {rig_identifier} for ESC command: {e}")
+        return False
     except Exception as e:
-        logger.error(f"Error stopping timer: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error sending ESC command to {rig_identifier}: {e}")
+        return False
+
+def send_overlay_show_command_to_rig(rig_identifier: str) -> bool:
+    """
+    Send an overlay show command to a specific rig's timer client.
+    
+    Args:
+        rig_identifier: The rig identifier (e.g., 'RIG1')
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # IP mapping for all rigs - same as timer commands
+        rig_ip_mapping = {
+            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
+            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
+            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
+            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
+        }
+        
+        rig_ip = rig_ip_mapping.get(rig_identifier)
+        if not rig_ip:
+            logger.error(f"No IP mapping found for rig: {rig_identifier}")
+            return False
+        
+        url = f"http://{rig_ip}:5001/show_overlay"
+        response = requests.post(url, json={}, timeout=5) 
+            
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("status") == "success":
+            logger.info(f"Overlay show command successful on {rig_identifier}")
+            return True
+        else:
+            logger.error(f"Overlay show command failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error communicating with {rig_identifier} for overlay show: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending overlay show command to {rig_identifier}: {e}")
+        return False
+
+def send_overlay_dismiss_command_to_rig(rig_identifier: str) -> bool:
+    """
+    Send an overlay dismiss command to a specific rig's timer client.
+    
+    Args:
+        rig_identifier: The rig identifier (e.g., 'RIG1')
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # IP mapping for all rigs - same as timer commands
+        rig_ip_mapping = {
+            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
+            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
+            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
+            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
+        }
+        
+        rig_ip = rig_ip_mapping.get(rig_identifier)
+        if not rig_ip:
+            logger.error(f"No IP mapping found for rig: {rig_identifier}")
+            return False
+        
+        url = f"http://{rig_ip}:5001/dismiss_overlay"
+        response = requests.post(url, json={}, timeout=5) 
+            
+        response.raise_for_status()
+        
+        result = response.json()
+        if result.get("status") == "success":
+            logger.info(f"Overlay dismiss command successful on {rig_identifier}")
+            return True
+        else:
+            logger.error(f"Overlay dismiss command failed on {rig_identifier}: {result.get('message', 'Unknown error')}")
+            return False
+            
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error communicating with {rig_identifier} for overlay dismiss: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error sending overlay dismiss command to {rig_identifier}: {e}")
+        return False
 
 def format_lap_time(milliseconds):
     """

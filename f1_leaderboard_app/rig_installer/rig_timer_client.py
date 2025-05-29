@@ -46,6 +46,7 @@ timer_thread = None
 root = None
 timer_label = None
 rig_identifier = None
+company_overlay = None  # Track the overlay window
 
 # Flask App
 app = Flask(__name__)
@@ -82,6 +83,34 @@ def start_timer_endpoint():
     else:
         return jsonify({"status": "error", "message": "GUI not initialized."}), 500
 
+@app.route('/stop_timer', methods=['POST'])
+def stop_timer_endpoint():
+    """Stop timer endpoint - receives commands from the admin interface."""
+    global timer_active, remaining_time, root, timer_label
+
+    if not timer_active:
+        # If already stopped or never started, still return success as the goal is achieved.
+        logger.info(f"Received stop command for {rig_identifier}, but timer was not active.")
+        return jsonify({"status": "success", "message": "Timer was not active or already stopped."})
+
+    timer_active = False # Signal the countdown thread to stop
+    remaining_time = 0   # Reset remaining time
+
+    if root and timer_label:
+        # Hide the window immediately
+        root.after(0, hide_timer_window)
+        # Optionally, update display to show it was stopped, or just hide
+        root.after(0, update_timer_display, "STOPPED") 
+        time.sleep(1) # Give a moment for display update if any, then hide again
+        root.after(0, hide_timer_window)
+
+        logger.info(f"Timer stopped by admin command on {rig_identifier}")
+        return jsonify({"status": "success", "message": f"Timer stopped for {rig_identifier}."})
+    else:
+        # This case should ideally not happen if timer was active
+        logger.warning(f"Stop command received for {rig_identifier}, but GUI not found. Marking inactive.")
+        return jsonify({"status": "success", "message": "Timer marked inactive, GUI not found."})
+
 @app.route('/status', methods=['GET'])
 def get_timer_status():
     """Get current timer status."""
@@ -90,6 +119,67 @@ def get_timer_status():
         "timer_active": timer_active,
         "remaining_time": remaining_time
     })
+
+@app.route('/dismiss_overlay', methods=['POST'])
+def dismiss_overlay_endpoint():
+    """Dismiss company overlay endpoint - receives commands from the admin interface."""
+    global company_overlay
+    
+    if company_overlay:
+        try:
+            company_overlay.destroy()
+            company_overlay = None
+            logger.info(f"Company overlay dismissed by admin command on {rig_identifier}")
+            return jsonify({"status": "success", "message": f"Overlay dismissed for {rig_identifier}."})
+        except Exception as e:
+            logger.error(f"Error dismissing overlay on {rig_identifier}: {e}")
+            company_overlay = None  # Reset reference even if destroy failed
+            return jsonify({"status": "error", "message": f"Error dismissing overlay: {str(e)}"})
+    else:
+        logger.info(f"Received dismiss command for {rig_identifier}, but no overlay was active.")
+        return jsonify({"status": "success", "message": "No overlay was active or already dismissed."})
+
+@app.route('/show_overlay', methods=['POST'])
+def show_overlay_endpoint():
+    """Show company overlay endpoint - receives commands from the admin interface."""
+    global company_overlay, root
+    
+    if company_overlay:
+        logger.info(f"Received show overlay command for {rig_identifier}, but overlay already active.")
+        return jsonify({"status": "success", "message": "Overlay is already active."})
+    
+    if not root:
+        logger.error(f"Received show overlay command for {rig_identifier}, but GUI not initialized.")
+        return jsonify({"status": "error", "message": "GUI not initialized."})
+    
+    try:
+        # Send ESC key to pause the game first
+        logger.info(f"Sending ESC key for manual session end on {rig_identifier}")
+        try:
+            pydirectinput.press('esc')
+            logger.info("ESC key sent via pydirectinput for manual session end.")
+        except Exception as e:
+            logger.error(f"Error pressing ESC key with pydirectinput: {e}")
+        
+        # Then show the overlay
+        root.after(0, show_company_overlay)
+        logger.info(f"Company overlay triggered by admin command on {rig_identifier}")
+        return jsonify({"status": "success", "message": f"Session ended and overlay shown for {rig_identifier}."})
+    except Exception as e:
+        logger.error(f"Error showing overlay on {rig_identifier}: {e}")
+        return jsonify({"status": "error", "message": f"Error showing overlay: {str(e)}"})
+
+@app.route('/press_esc', methods=['POST'])
+def press_esc_endpoint():
+    """Press ESC key endpoint - simple utility command from the admin interface."""
+    try:
+        logger.info(f"Pressing ESC key on {rig_identifier} by admin command")
+        pydirectinput.press('esc')
+        logger.info("ESC key sent via pydirectinput.")
+        return jsonify({"status": "success", "message": f"ESC key pressed on {rig_identifier}."})
+    except Exception as e:
+        logger.error(f"Error pressing ESC key on {rig_identifier}: {e}")
+        return jsonify({"status": "error", "message": f"Error pressing ESC key: {str(e)}"})
 
 def countdown_timer_task():
     """Main countdown timer logic."""
@@ -111,6 +201,7 @@ def countdown_timer_task():
         except Exception as e:
             logger.error(f"Error pressing ESC key with pydirectinput: {e}")
         
+        root.after(0, show_company_overlay)  # Show full-screen company overlay immediately
         time.sleep(3) 
         root.after(0, hide_timer_window)
 
@@ -176,6 +267,61 @@ def setup_gui():
 
     root.after(1000, check_and_show_window)
     root.mainloop()
+
+def show_company_overlay():
+    """Show full-screen company overlay when timer expires."""
+    global root, company_overlay
+    
+    if not root:
+        return
+    
+    # If overlay already exists, don't create another
+    if company_overlay:
+        return
+    
+    # Create overlay window
+    company_overlay = tk.Toplevel(root)
+    company_overlay.title("Session Complete")
+    company_overlay.attributes('-fullscreen', True)
+    company_overlay.attributes('-topmost', True)
+    company_overlay.configure(bg='#1a1a1a')  # Dark background
+    company_overlay.overrideredirect(True)
+    
+    # Main container
+    main_frame = tk.Frame(company_overlay, bg='#1a1a1a')
+    main_frame.pack(expand=True, fill='both')
+    
+    # Company logo/name
+    logo_label = tk.Label(
+        main_frame,
+        text="LANDGAME",
+        font=("Arial", 72, "bold"),
+        fg='#00ff00',  # Green color
+        bg='#1a1a1a'
+    )
+    logo_label.pack(expand=True)
+    
+    # Session complete message
+    message_label = tk.Label(
+        main_frame,
+        text="SESSION COMPLETE",
+        font=("Arial", 36),
+        fg='white',
+        bg='#1a1a1a'
+    )
+    message_label.pack(pady=(0, 50))
+    
+    # Instructions for operator
+    instruction_label = tk.Label(
+        main_frame,
+        text="Contact staff to continue",
+        font=("Arial", 18),
+        fg='#cccccc',
+        bg='#1a1a1a'
+    )
+    instruction_label.pack(pady=(0, 100))
+    
+    logger.info(f"Company overlay displayed on {rig_identifier} (operator dismissal only)")
 
 def main():
     """Main entry point."""
