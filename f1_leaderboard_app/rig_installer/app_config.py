@@ -109,7 +109,7 @@ for path in _POSSIBLE_TELEMETRY_PATHS:
 
 # If not found, use the default (original) path - the rig_listener will handle the error
 if TELEMETRY_REPO_PATH is None:
-TELEMETRY_REPO_PATH = "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application"
+    TELEMETRY_REPO_PATH = "C:/f1-24-telemetry-application"
 
 # Database URL
 DATABASE_URL = "backend/database/f1_leaderboard.db"
