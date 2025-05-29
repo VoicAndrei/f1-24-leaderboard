@@ -156,6 +156,76 @@
             border-radius: 4px;
             display: none;
         }
+        
+        /* Network configuration styles */
+        .network-profile {
+            display: inline-block;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+        
+        .network-profile.shop {
+            background-color: rgba(39, 174, 96, 0.2);
+            color: #2ecc71;
+            border: 1px solid #27ae60;
+        }
+        
+        .network-profile.mobile {
+            background-color: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+            border: 1px solid #2980b9;
+        }
+        
+        .network-info {
+            background-color: #333;
+            padding: 1rem;
+            border-radius: 4px;
+            margin: 1rem 0;
+        }
+        
+        .network-switch-buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .network-switch-buttons button {
+            flex: 1;
+            padding: 0.8rem;
+            font-size: 1rem;
+        }
+        
+        .batch-download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .batch-download-card {
+            background-color: #333;
+            padding: 1rem;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .batch-download-card h4 {
+            margin: 0 0 0.5rem 0;
+            color: #e10600;
+        }
+        
+        .batch-download-card button {
+            width: 100%;
+        }
+        
+        #network-message {
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+            display: none;
+        }
     </style>
 </head>
 <body>

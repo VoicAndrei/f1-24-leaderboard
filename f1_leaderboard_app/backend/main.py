@@ -27,7 +27,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(root_dir)
 
 # Import app configuration and database manager
-from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS, F1_TRACK_DISPLAY_NAMES
+from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS, F1_TRACK_DISPLAY_NAMES, RIG_IP_MAPPING, NETWORK_CONFIG, NETWORK_PROFILE, SHOP_NETWORK, MOBILE_NETWORK, set_network_profile
 from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
@@ -453,15 +453,8 @@ def send_timer_command_to_rig(rig_identifier: str, action: str, duration_seconds
         bool: True if successful, False otherwise
     """
     try:
-        # IP mapping for all rigs - Update these with actual static IPs assigned to each rig PC
-        rig_ip_mapping = {
-            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
-            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
-            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
-            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
-        }
-        
-        rig_ip = rig_ip_mapping.get(rig_identifier)
+        # Use dynamic IP mapping from configuration
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -736,15 +729,8 @@ def send_esc_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # IP mapping for all rigs - same as timer commands
-        rig_ip_mapping = {
-            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
-            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
-            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
-            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
-        }
-        
-        rig_ip = rig_ip_mapping.get(rig_identifier)
+        # Use dynamic IP mapping from configuration
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -780,15 +766,8 @@ def send_overlay_show_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # IP mapping for all rigs - same as timer commands
-        rig_ip_mapping = {
-            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
-            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
-            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
-            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
-        }
-        
-        rig_ip = rig_ip_mapping.get(rig_identifier)
+        # Use dynamic IP mapping from configuration
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -824,15 +803,8 @@ def send_overlay_dismiss_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # IP mapping for all rigs - same as timer commands
-        rig_ip_mapping = {
-            'RIG1': '192.168.0.210',  # Assign this static IP to RIG1 PC
-            'RIG2': '192.168.0.211',  # Assign this static IP to RIG2 PC
-            'RIG3': '192.168.0.212',  # Assign this static IP to RIG3 PC  
-            'RIG4': '192.168.0.213',  # Assign this static IP to RIG4 PC
-        }
-        
-        rig_ip = rig_ip_mapping.get(rig_identifier)
+        # Use dynamic IP mapping from configuration
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -878,6 +850,12 @@ def format_lap_time(milliseconds):
     return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
 
 if __name__ == "__main__":
+    # Check for network profile environment variable and set accordingly
+    env_profile = os.environ.get('NETWORK_PROFILE', 'SHOP')
+    if env_profile in ['SHOP', 'MOBILE']:
+        set_network_profile(env_profile)
+        logger.info(f"Using network profile: {env_profile}")
+    
     # Run the FastAPI app with uvicorn
     uvicorn.run(
         "main:app",

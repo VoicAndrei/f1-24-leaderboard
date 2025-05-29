@@ -110,4 +110,64 @@ DEFAULT_RIG_NAMES = {
 }
 
 # Default UDP port for telemetry data
-DEFAULT_UDP_PORT = 20777 
+DEFAULT_UDP_PORT = 20777
+
+# Network Configuration Profiles
+# Choose which profile to use by setting NETWORK_PROFILE below
+
+# Profile 1: Shop/Home Network (192.168.0.x)
+SHOP_NETWORK = {
+    "name": "Shop/Home Network",
+    "api_server_ip": "192.168.0.224",  # Reception laptop
+    "rig_ips": {
+        'RIG1': '192.168.0.210',
+        'RIG2': '192.168.0.211', 
+        'RIG3': '192.168.0.212',
+        'RIG4': '192.168.0.213',
+    },
+    "gateway": "192.168.0.1",
+    "subnet_mask": "255.255.255.0",
+    "network_range": "192.168.0.x"
+}
+
+# Profile 2: Mobile/Event Network (192.168.1.x) 
+MOBILE_NETWORK = {
+    "name": "Mobile/Event Network", 
+    "api_server_ip": "192.168.1.100",  # Reception laptop (actual IP)
+    "rig_ips": {
+        'RIG1': '192.168.1.103',  # Using actual rig IP as base
+        'RIG2': '192.168.1.104',
+        'RIG3': '192.168.1.105', 
+        'RIG4': '192.168.1.106',
+    },
+    "gateway": "192.168.1.1",
+    "subnet_mask": "255.255.255.0", 
+    "network_range": "192.168.1.x"
+}
+
+# Default profile (will be overridden by startup scripts)
+NETWORK_PROFILE = "SHOP"
+
+# Get the active network configuration  
+if NETWORK_PROFILE == "MOBILE":
+    NETWORK_CONFIG = MOBILE_NETWORK
+else:
+    NETWORK_CONFIG = SHOP_NETWORK
+
+# Extract values for backward compatibility
+API_SERVER_IP = NETWORK_CONFIG["api_server_ip"]
+RIG_IP_MAPPING = NETWORK_CONFIG["rig_ips"]
+
+# Function to override network config at runtime
+def set_network_profile(profile):
+    """Set network profile programmatically."""
+    global NETWORK_PROFILE, NETWORK_CONFIG, API_SERVER_IP, RIG_IP_MAPPING
+    
+    NETWORK_PROFILE = profile
+    if profile == "MOBILE":
+        NETWORK_CONFIG = MOBILE_NETWORK
+    else:
+        NETWORK_CONFIG = SHOP_NETWORK
+    
+    API_SERVER_IP = NETWORK_CONFIG["api_server_ip"]
+    RIG_IP_MAPPING = NETWORK_CONFIG["rig_ips"] 

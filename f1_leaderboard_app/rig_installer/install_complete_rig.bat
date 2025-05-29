@@ -238,13 +238,19 @@ pause
 
 REM Create the complete startup script
 echo.
-echo Creating startup script for %RIG_ID%...
+echo Creating startup scripts for %RIG_ID%...
+
+REM Create SHOP network startup script
+echo Creating SHOP network startup script...
 (
 echo @echo off
-echo REM F1 Leaderboard Complete System - %RIG_ID%
+echo REM F1 Leaderboard Complete System - %RIG_ID% - SHOP Network
 echo echo ========================================
-echo echo F1 Leaderboard System - %RIG_ID%
+echo echo F1 Leaderboard System - %RIG_ID% - SHOP
 echo echo ========================================
+echo echo.
+echo echo Network: 192.168.0.x ^(Shop/Home^)
+echo echo Server: 192.168.0.224:8000
 echo echo.
 echo echo Starting both Timer Client and Telemetry Listener...
 echo echo.
@@ -258,27 +264,75 @@ echo echo - Both systems will start automatically
 echo echo.
 echo cd /d "%%~dp0"
 echo.
-echo REM Start both components simultaneously
-echo start "Timer Client - %RIG_ID%" python rig_timer_client.py --rig-id %RIG_ID%
-echo start "Telemetry Listener - %RIG_ID%" python rig_listener.py --rig-id %RIG_ID% --api-host 192.168.0.224 --api-port 8000
+echo REM Start both components simultaneously for SHOP network
+echo start "Timer Client - %RIG_ID% - SHOP" python rig_timer_client.py --rig-id %RIG_ID% --api-host 192.168.0.224
+echo start "Telemetry Listener - %RIG_ID% - SHOP" python rig_listener.py --rig-id %RIG_ID% --api-host 192.168.0.224 --api-port 8000
 echo.
 echo echo Both F1 Leaderboard components are now running:
 echo echo - Timer Client: Controls session time limits
 echo echo - Telemetry Listener: Captures lap times from F1 2024
+echo echo - Network: SHOP ^(192.168.0.x^)
 echo echo.
 echo echo You can close this window. The other windows can be minimized.
 echo echo.
 echo pause
-) > "%INSTALL_PATH%\start_complete_%RIG_ID%.bat"
+) > "%INSTALL_PATH%\start_shop_%RIG_ID%.bat"
 
-REM Create desktop shortcut
-echo Creating desktop shortcut...
+REM Create MOBILE network startup script
+echo Creating MOBILE network startup script...
+(
+echo @echo off
+echo REM F1 Leaderboard Complete System - %RIG_ID% - MOBILE Network
+echo echo ========================================
+echo echo F1 Leaderboard System - %RIG_ID% - MOBILE
+echo echo ========================================
+echo echo.
+echo echo Network: 192.168.1.x ^(Mobile/Event^)
+echo echo Server: 192.168.1.100:8000
+echo echo.
+echo echo Starting both Timer Client and Telemetry Listener...
+echo echo.
+echo echo Timer: Receives timer commands from operator
+echo echo Telemetry: Captures lap times from F1 2024
+echo echo.
+echo echo IMPORTANT:
+echo echo - Keep this window open ^(you can minimize it^)
+echo echo - Make sure F1 2024 telemetry is configured
+echo echo - Both systems will start automatically
+echo echo.
+echo cd /d "%%~dp0"
+echo.
+echo REM Start both components simultaneously for MOBILE network
+echo start "Timer Client - %RIG_ID% - MOBILE" python rig_timer_client.py --rig-id %RIG_ID% --api-host 192.168.1.100
+echo start "Telemetry Listener - %RIG_ID% - MOBILE" python rig_listener.py --rig-id %RIG_ID% --api-host 192.168.1.100 --api-port 8000
+echo.
+echo echo Both F1 Leaderboard components are now running:
+echo echo - Timer Client: Controls session time limits
+echo echo - Telemetry Listener: Captures lap times from F1 2024
+echo echo - Network: MOBILE ^(192.168.1.x^)
+echo echo.
+echo echo You can close this window. The other windows can be minimized.
+echo echo.
+echo pause
+) > "%INSTALL_PATH%\start_mobile_%RIG_ID%.bat"
+
+REM Create desktop shortcuts for both networks
+echo Creating desktop shortcuts...
 set DESKTOP=%USERPROFILE%\Desktop
+
+REM SHOP network shortcut
 (
 echo @echo off
 echo cd /d "%INSTALL_PATH%"
-echo start "" "%INSTALL_PATH%\start_complete_%RIG_ID%.bat"
-) > "%DESKTOP%\Start F1 System %RIG_ID%.bat"
+echo start "" "%INSTALL_PATH%\start_shop_%RIG_ID%.bat"
+) > "%DESKTOP%\Start F1 System %RIG_ID% - SHOP.bat"
+
+REM MOBILE network shortcut
+(
+echo @echo off
+echo cd /d "%INSTALL_PATH%"
+echo start "" "%INSTALL_PATH%\start_mobile_%RIG_ID%.bat"
+) > "%DESKTOP%\Start F1 System %RIG_ID% - MOBILE.bat"
 
 REM Test the installation
 echo.
@@ -322,14 +376,14 @@ echo Installation Summary:
 echo - RIG ID: %RIG_ID%
 echo - Static IP should be: %TARGET_IP%
 echo - Installation path: %INSTALL_PATH%
-echo - Desktop shortcut: "Start F1 System %RIG_ID%"
+echo - Desktop shortcuts: "Start F1 System %RIG_ID% - SHOP" and "Start F1 System %RIG_ID% - MOBILE"
 echo.
 echo COMPONENTS INSTALLED:
 echo 1. Timer Client - Session time limits and auto-pause
 echo 2. Telemetry Listener - Lap time capture for leaderboard
 echo.
 echo TO START THE COMPLETE SYSTEM:
-echo 1. Double-click "Start F1 System %RIG_ID%" on desktop
+echo 1. Double-click "Start F1 System %RIG_ID% - SHOP" or "Start F1 System %RIG_ID% - MOBILE" on desktop
 echo 2. Two command windows will open (can be minimized)
 echo 3. The operator can now control this rig from admin panel
 echo 4. Lap times will automatically appear on the leaderboard
@@ -338,7 +392,8 @@ echo TROUBLESHOOTING:
 echo - Verify static IP: %TARGET_IP%
 echo - Configure F1 2024 telemetry settings
 echo - Allow Python through Windows Firewall
-echo - Operator PC should be at 192.168.0.224:8000
+echo - Operator PC should be at 192.168.0.224:8000 for SHOP network
+echo - Operator PC should be at 192.168.1.100:8000 for MOBILE network
 echo.
 echo Installation completed successfully!
 pause 
