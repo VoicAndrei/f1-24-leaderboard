@@ -191,27 +191,42 @@ echo ========================================
 echo NETWORK CONFIGURATION
 echo ========================================
 echo.
-if /i "%RIG_ID%"=="RIG1" set TARGET_IP=192.168.0.210
-if /i "%RIG_ID%"=="RIG2" set TARGET_IP=192.168.0.211
-if /i "%RIG_ID%"=="RIG3" set TARGET_IP=192.168.0.212
-if /i "%RIG_ID%"=="RIG4" set TARGET_IP=192.168.0.213
+if /i "%RIG_ID%"=="RIG1" set SHOP_IP=192.168.0.210
+if /i "%RIG_ID%"=="RIG1" set MOBILE_IP=192.168.1.103
+if /i "%RIG_ID%"=="RIG2" set SHOP_IP=192.168.0.211
+if /i "%RIG_ID%"=="RIG2" set MOBILE_IP=192.168.1.104
+if /i "%RIG_ID%"=="RIG3" set SHOP_IP=192.168.0.212
+if /i "%RIG_ID%"=="RIG3" set MOBILE_IP=192.168.1.105
+if /i "%RIG_ID%"=="RIG4" set SHOP_IP=192.168.0.213
+if /i "%RIG_ID%"=="RIG4" set MOBILE_IP=192.168.1.106
 
-echo This rig should have static IP: %TARGET_IP%
+echo This rig (%RIG_ID%) should use these static IP addresses:
 echo.
-echo IMPORTANT: You need to set this computer's IP address to %TARGET_IP%
+echo SHOP Network (192.168.0.x):
+echo   IP: %SHOP_IP%
+echo   Subnet: 255.255.255.0
+echo   Gateway: 192.168.0.1
+echo.
+echo MOBILE Network (192.168.1.x):
+echo   IP: %MOBILE_IP%
+echo   Subnet: 255.255.255.0
+echo   Gateway: 192.168.1.1
+echo.
+echo IMPORTANT: Set the appropriate IP address for your current network.
+echo You can switch between networks by changing the IP in Windows settings.
 echo.
 echo Instructions:
 echo 1. Go to Network Settings
 echo 2. Change adapter options
 echo 3. Right-click your network connection - Properties
 echo 4. Select IPv4 - Properties
-echo 5. Use the following IP address:
-echo    IP: %TARGET_IP%
-echo    Subnet: 255.255.255.0
-echo    Gateway: 192.168.0.1
-echo    DNS: 8.8.8.8
+echo 5. Use the following IP address (choose based on your network):
+echo    - For SHOP: %SHOP_IP%
+echo    - For MOBILE: %MOBILE_IP%
+echo 6. Set appropriate subnet mask and gateway (see above)
+echo 7. Set DNS: 8.8.8.8
 echo.
-set /p CONTINUE="Have you set the static IP to %TARGET_IP%? (y/n): "
+set /p CONTINUE="Have you set the appropriate static IP for this rig? (y/n): "
 if /i not "%CONTINUE%"=="y" (
     echo Please set the static IP first, then run this installer again.
     pause
@@ -265,7 +280,7 @@ echo echo.
 echo cd /d "%%~dp0"
 echo.
 echo REM Start both components simultaneously for SHOP network
-echo start "Timer Client - %RIG_ID% - SHOP" python rig_timer_client.py --rig-id %RIG_ID% --api-host 192.168.0.224
+echo start "Timer Client - %RIG_ID% - SHOP" python rig_timer_client.py --rig-id %RIG_ID%
 echo start "Telemetry Listener - %RIG_ID% - SHOP" python rig_listener.py --rig-id %RIG_ID% --api-host 192.168.0.224 --api-port 8000
 echo.
 echo echo Both F1 Leaderboard components are now running:
@@ -303,7 +318,7 @@ echo echo.
 echo cd /d "%%~dp0"
 echo.
 echo REM Start both components simultaneously for MOBILE network
-echo start "Timer Client - %RIG_ID% - MOBILE" python rig_timer_client.py --rig-id %RIG_ID% --api-host 192.168.1.100
+echo start "Timer Client - %RIG_ID% - MOBILE" python rig_timer_client.py --rig-id %RIG_ID%
 echo start "Telemetry Listener - %RIG_ID% - MOBILE" python rig_listener.py --rig-id %RIG_ID% --api-host 192.168.1.100 --api-port 8000
 echo.
 echo echo Both F1 Leaderboard components are now running:
@@ -374,7 +389,7 @@ echo ========================================
 echo.
 echo Installation Summary:
 echo - RIG ID: %RIG_ID%
-echo - Static IP should be: %TARGET_IP%
+echo - Static IP should be: %SHOP_IP% and %MOBILE_IP%
 echo - Installation path: %INSTALL_PATH%
 echo - Desktop shortcuts: "Start F1 System %RIG_ID% - SHOP" and "Start F1 System %RIG_ID% - MOBILE"
 echo.
@@ -389,7 +404,7 @@ echo 3. The operator can now control this rig from admin panel
 echo 4. Lap times will automatically appear on the leaderboard
 echo.
 echo TROUBLESHOOTING:
-echo - Verify static IP: %TARGET_IP%
+echo - Verify static IP: %SHOP_IP% and %MOBILE_IP%
 echo - Configure F1 2024 telemetry settings
 echo - Allow Python through Windows Firewall
 echo - Operator PC should be at 192.168.0.224:8000 for SHOP network

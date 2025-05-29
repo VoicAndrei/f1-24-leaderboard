@@ -20,8 +20,11 @@ echo.
 echo Press Ctrl+C to stop the server
 echo.
 
+REM Change to the f1_leaderboard_app directory so paths work correctly
+cd f1_leaderboard_app
+
 REM Start the server with shop configuration
-python -c "import sys; sys.path.append('.'); from f1_leaderboard_app.config.app_config import set_network_profile; set_network_profile('SHOP')" && python f1_leaderboard_app/backend/main.py
+python -c "import sys; sys.path.append('.'); from config.app_config import set_network_profile; set_network_profile('SHOP')" && python backend/main.py
 
 echo.
 echo Server stopped.
