@@ -2,6 +2,8 @@
 F1 Leaderboard Application Configuration
 """
 
+import os
+
 # List of official F1 2024 tracks
 F1_2024_TRACKS = [
     "Bahrain International Circuit",      # Bahrain (Sakhir)
@@ -86,88 +88,78 @@ TRACK_ID_MAPPING = {
     "Yas Marina Circuit": 14                   # abu_dhabi
 }
 
-# Path to the telemetry repository - fixed for Windows
+# Path to the telemetry repository - check multiple possible locations
 TELEMETRY_REPO_PATH = "C:/Users/landg/Desktop/f1-24-app/f1-24-telemetry-application"
 
-# Database URL
 DATABASE_URL = "backend/database/f1_leaderboard.db"
-
-# API server configuration
-API_HOST = "0.0.0.0"
 API_PORT = 8000
-
-# Auto cycle interval for leaderboard display (in seconds)
 AUTO_CYCLE_INTERVAL_SECONDS = 30
-
-# Number of racing simulator rigs
-NUMBER_OF_RIGS = 3
-
-# Default names for the simulator rigs
+NUMBER_OF_RIGS = 4 # Updated to 4
 DEFAULT_RIG_NAMES = {
     "RIG1": "Simulator 1",
     "RIG2": "Simulator 2",
-    "RIG3": "Simulator 3"
+    "RIG3": "Simulator 3",
+    "RIG4": "Simulator 4" # Added RIG4
 }
-
-# Default UDP port for telemetry data
 DEFAULT_UDP_PORT = 20777
 
-# Network Configuration Profiles
-# Choose which profile to use by setting NETWORK_PROFILE below
-
-# Profile 1: Shop/Home Network (192.168.0.x)
-SHOP_NETWORK = {
+# --- Network Configuration Profiles ---
+SHOP_NETWORK_CONFIG = {
     "name": "Shop/Home Network",
-    "api_server_ip": "192.168.0.224",  # Reception laptop
+    "api_server_ip": "192.168.0.224", # Your operator PC's SHOP IP
     "rig_ips": {
-        'RIG1': '192.168.0.210',
-        'RIG2': '192.168.0.211', 
-        'RIG3': '192.168.0.212',
-        'RIG4': '192.168.0.213',
+        'RIG1': '192.168.0.210', 'RIG2': '192.168.0.211',
+        'RIG3': '192.168.0.212', 'RIG4': '192.168.0.213',
     },
-    "gateway": "192.168.0.1",
-    "subnet_mask": "255.255.255.0",
+    "gateway": "192.168.0.1", "subnet_mask": "255.255.255.0",
     "network_range": "192.168.0.x"
 }
 
-# Profile 2: Mobile/Event Network (192.168.1.x) 
-MOBILE_NETWORK = {
-    "name": "Mobile/Event Network", 
-    "api_server_ip": "192.168.1.100",  # Reception laptop (actual IP)
+MOBILE_NETWORK_CONFIG = {
+    "name": "Mobile/Event Network",
+    "api_server_ip": "192.168.1.100", # Your operator PC's MOBILE IP
     "rig_ips": {
-        'RIG1': '192.168.1.103',  # Using actual rig IP as base
-        'RIG2': '192.168.1.104',
-        'RIG3': '192.168.1.105', 
-        'RIG4': '192.168.1.106',
+        'RIG1': '192.168.1.103', 'RIG2': '192.168.1.104', # Your RIG1 actual MOBILE IP
+        'RIG3': '192.168.1.105', 'RIG4': '192.168.1.106',
     },
-    "gateway": "192.168.1.1",
-    "subnet_mask": "255.255.255.0", 
+    "gateway": "192.168.1.1", "subnet_mask": "255.255.255.0",
     "network_range": "192.168.1.x"
 }
 
-# Default profile (will be overridden by startup scripts)
-NETWORK_PROFILE = "SHOP"
+# --- Active Network Configuration ---
+# Determined at runtime by environment variable in main.py (and startup scripts)
+ACTIVE_NETWORK_PROFILE = os.environ.get('NETWORK_PROFILE', 'SHOP').upper()
 
-# Get the active network configuration  
-if NETWORK_PROFILE == "MOBILE":
-    NETWORK_CONFIG = MOBILE_NETWORK
-else:
-    NETWORK_CONFIG = SHOP_NETWORK
-
-# Extract values for backward compatibility
-API_SERVER_IP = NETWORK_CONFIG["api_server_ip"]
-RIG_IP_MAPPING = NETWORK_CONFIG["rig_ips"]
-
-# Function to override network config at runtime
-def set_network_profile(profile):
-    """Set network profile programmatically."""
-    global NETWORK_PROFILE, NETWORK_CONFIG, API_SERVER_IP, RIG_IP_MAPPING
-    
-    NETWORK_PROFILE = profile
-    if profile == "MOBILE":
-        NETWORK_CONFIG = MOBILE_NETWORK
+if ACTIVE_NETWORK_PROFILE == "MOBILE":
+    CURRENT_NETWORK_CONFIG = MOBILE_NETWORK_CONFIG
+    print(f"INFO: Using MOBILE network profile from app_config.py. Operator IP: {MOBILE_NETWORK_CONFIG['api_server_ip']}")
+else: # Default to SHOP
+    CURRENT_NETWORK_CONFIG = SHOP_NETWORK_CONFIG
+    if ACTIVE_NETWORK_PROFILE != "SHOP": 
+        print(f"Warning: Invalid NETWORK_PROFILE env var '{ACTIVE_NETWORK_PROFILE}'. Defaulting to SHOP. Operator IP: {SHOP_NETWORK_CONFIG['api_server_ip']}")
     else:
-        NETWORK_CONFIG = SHOP_NETWORK
-    
-    API_SERVER_IP = NETWORK_CONFIG["api_server_ip"]
-    RIG_IP_MAPPING = NETWORK_CONFIG["rig_ips"] 
+        print(f"INFO: Using SHOP network profile from app_config.py. Operator IP: {SHOP_NETWORK_CONFIG['api_server_ip']}")
+    ACTIVE_NETWORK_PROFILE = "SHOP"
+
+
+# Export these directly - they will reflect the chosen profile from above
+API_HOST = CURRENT_NETWORK_CONFIG["api_server_ip"]
+RIG_IP_MAPPING = CURRENT_NETWORK_CONFIG["rig_ips"]
+# Keep NETWORK_CONFIG for any other part of the system that might need the full current config
+NETWORK_CONFIG = CURRENT_NETWORK_CONFIG 
+
+# For convenience, also export SHOP_NETWORK and MOBILE_NETWORK if needed by other modules (e.g. admin UI)
+SHOP_NETWORK = SHOP_NETWORK_CONFIG
+MOBILE_NETWORK = MOBILE_NETWORK_CONFIG
+
+# Function to print current effective settings (for debugging or info)
+def print_active_network_config():
+    # This function is for debugging and can be called from main.py if needed
+    print(f"--- app_config.py: Active Network Profile Report ---")
+    print(f"  Effective Profile: {ACTIVE_NETWORK_PROFILE}")
+    print(f"  API Host (Server IP for Uvicorn): {API_HOST}")
+    print(f"  Rig IPs Used for Commands: {RIG_IP_MAPPING}")
+    print(f"  Full Current Config Object: {NETWORK_CONFIG}")
+    print(f"----------------------------------------------------")
+
+# The set_network_profile function is removed as profile is set by ENV var at import time. 

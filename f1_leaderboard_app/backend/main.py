@@ -26,8 +26,14 @@ from pydantic import BaseModel, Field
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(root_dir)
 
-# Import app configuration and database manager
-from config.app_config import API_HOST, API_PORT, F1_2024_TRACKS, AUTO_CYCLE_INTERVAL_SECONDS, F1_TRACK_DISPLAY_NAMES, RIG_IP_MAPPING, NETWORK_CONFIG, NETWORK_PROFILE, SHOP_NETWORK, MOBILE_NETWORK, set_network_profile
+# Import app configuration - THIS NOW SETS THE PROFILE BASED ON ENV VAR
+from config.app_config import (
+    API_HOST, API_PORT, RIG_IP_MAPPING, F1_2024_TRACKS, 
+    AUTO_CYCLE_INTERVAL_SECONDS, F1_TRACK_DISPLAY_NAMES, 
+    NETWORK_CONFIG, ACTIVE_NETWORK_PROFILE, SHOP_NETWORK, MOBILE_NETWORK, # Import new/renamed vars
+    print_active_network_config # Optional debug function
+)
+
 from backend.database.db_manager import (
     add_lap_time,
     get_top_lap_times,
@@ -40,6 +46,10 @@ from backend.database.db_manager import (
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Optional: Print the active network config at startup for verification
+if __name__ == "__main__": # To ensure it only runs when main.py is executed directly
+    print_active_network_config()
 
 # Leaderboard display state management
 current_track_index = 0
@@ -453,8 +463,7 @@ def send_timer_command_to_rig(rig_identifier: str, action: str, duration_seconds
         bool: True if successful, False otherwise
     """
     try:
-        # Use dynamic IP mapping from configuration
-        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier) # RIG_IP_MAPPING is now correctly set at import time
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -729,8 +738,7 @@ def send_esc_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Use dynamic IP mapping from configuration
-        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier) # RIG_IP_MAPPING is now correctly set at import time
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -766,8 +774,7 @@ def send_overlay_show_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Use dynamic IP mapping from configuration
-        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier) # RIG_IP_MAPPING is now correctly set at import time
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -803,8 +810,7 @@ def send_overlay_dismiss_command_to_rig(rig_identifier: str) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Use dynamic IP mapping from configuration
-        rig_ip = RIG_IP_MAPPING.get(rig_identifier)
+        rig_ip = RIG_IP_MAPPING.get(rig_identifier) # RIG_IP_MAPPING is now correctly set at import time
         if not rig_ip:
             logger.error(f"No IP mapping found for rig: {rig_identifier}")
             return False
@@ -850,16 +856,13 @@ def format_lap_time(milliseconds):
     return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
 
 if __name__ == "__main__":
-    # Check for network profile environment variable and set accordingly
-    env_profile = os.environ.get('NETWORK_PROFILE', 'SHOP')
-    if env_profile in ['SHOP', 'MOBILE']:
-        set_network_profile(env_profile)
-        logger.info(f"Using network profile: {env_profile}")
+    # The API_HOST is now set correctly by app_config.py at import time
+    logger.info(f"MAIN.PY: Starting server with API_HOST: {API_HOST} for profile: {ACTIVE_NETWORK_PROFILE}")
+    logger.info(f"MAIN.PY: Rig IPs will be: {RIG_IP_MAPPING}")
     
-    # Run the FastAPI app with uvicorn
     uvicorn.run(
-        "main:app",
-        host=API_HOST,
+        "main:app", 
+        host=API_HOST, 
         port=API_PORT,
         reload=True
     ) 

@@ -661,7 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Attach event listener to the form
     const form = document.getElementById('assign-player-form');
     if (form) {
-        form.addEventListener('submit', assignPlayer);
+    form.addEventListener('submit', assignPlayer);
     }
     
     // Attach event listener to manual track selection button
