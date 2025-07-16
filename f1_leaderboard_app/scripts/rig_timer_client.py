@@ -53,7 +53,7 @@ app = Flask(__name__)
 
 def run_flask_app(host, port):
     """Run the Flask server."""
-    app.run(host=host, port=port, debug=False)
+    app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
 
 @app.route('/start_timer', methods=['POST'])
 def start_timer_endpoint():
