@@ -62,9 +62,22 @@ async function fetchRigAssignments() {
             // Create timer control HTML
             const timerControlHtmlContent = createTimerControlHtml(rig.rig_identifier, timerStatus);
             
+            // Create player info HTML with contact details
+            const playerInfoHtml = `
+                <div class="player-info">
+                    <div class="player-name">${rig.current_player_name}</div>
+                    ${rig.phone_number || rig.email ? `
+                        <div class="contact-info">
+                            ${rig.phone_number ? `<div>📞 ${rig.phone_number}</div>` : ''}
+                            ${rig.email ? `<div>📧 ${rig.email}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+            
             row.innerHTML = `
                 <td>${rig.rig_identifier}</td>
-                <td>${rig.current_player_name}</td>
+                <td>${playerInfoHtml}</td>
                 <td id="timer-cell-${rig.rig_identifier}">${timerControlHtmlContent}</td>
             `;
             tableBody.appendChild(row);
@@ -300,6 +313,8 @@ async function assignPlayer(event) {
     // Get form values
     const rigIdentifier = document.getElementById('rig-select').value;
     const playerName = document.getElementById('player-name-input').value.trim();
+    const phoneNumber = document.getElementById('phone-input').value.trim();
+    const email = document.getElementById('email-input').value.trim();
     
     // Basic validation
     if (!rigIdentifier) {
@@ -312,11 +327,19 @@ async function assignPlayer(event) {
         return;
     }
     
+    // Email validation if provided
+    if (email && !isValidEmail(email)) {
+        showMessage('Please enter a valid email address.', false);
+        return;
+    }
+    
     try {
         // Prepare request data
         const data = {
             rig_identifier: rigIdentifier,
-            player_name: playerName
+            player_name: playerName,
+            phone_number: phoneNumber,
+            email: email
         };
         
         // Submit data to API
@@ -343,6 +366,8 @@ async function assignPlayer(event) {
         
         // Clear the form
         document.getElementById('player-name-input').value = '';
+        document.getElementById('phone-input').value = '';
+        document.getElementById('email-input').value = '';
         document.getElementById('rig-select').selectedIndex = 0;
     } catch (error) {
         console.error('Error assigning player:', error);
@@ -678,4 +703,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Fetch timer statuses initially
     fetchTimerStatus();
-}); 
+});
+
+// Email validation function
+function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+} 

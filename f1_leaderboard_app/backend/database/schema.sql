@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE TABLE IF NOT EXISTS rigs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     rig_identifier TEXT UNIQUE NOT NULL,
-    current_player_name TEXT DEFAULT "N/A"
+    current_player_name TEXT DEFAULT "N/A",
+    phone_number TEXT DEFAULT "",
+    email TEXT DEFAULT ""
 );
 
 -- Lap times table - stores lap times for each track and rig

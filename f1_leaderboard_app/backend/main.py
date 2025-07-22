@@ -95,6 +95,8 @@ class RigAssignment(BaseModel):
     id: int
     rig_identifier: str
     current_player_name: str
+    phone_number: str
+    email: str
 
 class AssignPlayerRequest(BaseModel):
     """
@@ -102,6 +104,8 @@ class AssignPlayerRequest(BaseModel):
     """
     rig_identifier: str = Field(..., description="Unique identifier for the simulator rig (e.g., 'RIG1')")
     player_name: str = Field(..., description="Name of the player to assign to the rig")
+    phone_number: str = Field("", description="Phone number of the player (optional)")
+    email: str = Field("", description="Email address of the player (optional)")
 
 class TrackSelectRequest(BaseModel):
     """
@@ -211,6 +215,16 @@ async def submit_lap_time(lap_data: LapTimeSubmit):
     try:
         # Get the current player name for the rig
         player_name = get_rig_current_player(lap_data.rig_identifier)
+        
+        # Check for anonymity code - if player name is "null" (case-insensitive), ignore the lap time
+        if player_name.lower() == "null":
+            logger.info(f"Lap time ignored for anonymous player on rig {lap_data.rig_identifier}")
+            return {
+                "success": True,
+                "message": f"Lap time recorded but not saved (anonymous mode)",
+                "lap_time_ms": lap_data.lap_time_ms,
+                "formatted_time": format_lap_time(lap_data.lap_time_ms)
+            }
         
         # Add the lap time to the database
         success = add_lap_time(
@@ -335,7 +349,9 @@ async def admin_assign_player(assignment: AssignPlayerRequest):
     try:
         success = assign_player_to_rig(
             assignment.rig_identifier,
-            assignment.player_name
+            assignment.player_name,
+            assignment.phone_number,
+            assignment.email
         )
         
         if not success:
@@ -343,7 +359,7 @@ async def admin_assign_player(assignment: AssignPlayerRequest):
         
         return {
             "success": True,
-            "message": f"Player '{assignment.player_name}' assigned to rig '{assignment.rig_identifier}'"
+            "message": f"Player '{assignment.player_name}' assigned to rig '{assignment.rig_identifier}' with contact info"
         }
     
     except HTTPException:

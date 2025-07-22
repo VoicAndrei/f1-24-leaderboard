@@ -291,13 +291,15 @@ def get_top_lap_times(track_name, limit=20):
         conn.close()
 
 
-def assign_player_to_rig(rig_identifier, player_name):
+def assign_player_to_rig(rig_identifier, player_name, phone_number="", email=""):
     """
     Assign a player to a simulator rig.
     
     Args:
         rig_identifier (str): Unique identifier for the rig (e.g., "RIG1")
         player_name (str): Name of the player to assign
+        phone_number (str, optional): Phone number of the player
+        email (str, optional): Email address of the player
         
     Returns:
         bool: True if successful, False otherwise
@@ -312,14 +314,14 @@ def assign_player_to_rig(rig_identifier, player_name):
             logger.error(f"Rig not found: {rig_identifier}")
             return False
         
-        # Update the rig's current player
+        # Update the rig's current player and contact information
         conn.execute(
-            "UPDATE rigs SET current_player_name = ? WHERE rig_identifier = ?",
-            (player_name, rig_identifier)
+            "UPDATE rigs SET current_player_name = ?, phone_number = ?, email = ? WHERE rig_identifier = ?",
+            (player_name, phone_number, email, rig_identifier)
         )
         
         conn.commit()
-        logger.info(f"Assigned player '{player_name}' to rig '{rig_identifier}'")
+        logger.info(f"Assigned player '{player_name}' to rig '{rig_identifier}' with contact info")
         return True
     
     except Exception as e:
@@ -342,7 +344,7 @@ def get_rig_assignments():
     
     try:
         cursor = conn.execute(
-            "SELECT id, rig_identifier, current_player_name FROM rigs ORDER BY rig_identifier"
+            "SELECT id, rig_identifier, current_player_name, phone_number, email FROM rigs ORDER BY rig_identifier"
         )
         
         results = []
@@ -350,7 +352,9 @@ def get_rig_assignments():
             results.append({
                 'id': row['id'],
                 'rig_identifier': row['rig_identifier'],
-                'current_player_name': row['current_player_name']
+                'current_player_name': row['current_player_name'],
+                'phone_number': row['phone_number'] if row['phone_number'] else "",
+                'email': row['email'] if row['email'] else ""
             })
         
         return results
