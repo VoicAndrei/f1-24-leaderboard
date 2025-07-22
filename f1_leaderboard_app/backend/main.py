@@ -40,7 +40,12 @@ from backend.database.db_manager import (
     get_rig_current_player,
     get_all_tracks,
     get_rig_assignments,
-    assign_player_to_rig
+    assign_player_to_rig,
+    get_all_lap_times_detailed,
+    get_database_stats,
+    update_lap_time_entry,
+    delete_lap_time_entry,
+    parse_lap_time_to_ms
 )
 
 # Set up logging
@@ -129,6 +134,39 @@ class TimerStatusResponse(BaseModel):
     remaining_time: int = 0
     duration_minutes: float = 0
 
+class LapTimeEntry(BaseModel):
+    """
+    Model for detailed lap time entry (database management).
+    """
+    id: int
+    lap_time_ms: int
+    lap_time_formatted: str
+    timestamp: str
+    player_name: str
+    rig_identifier: str
+    phone_number: str
+    email: str
+    track_name: str
+
+class DatabaseStats(BaseModel):
+    """
+    Model for database statistics.
+    """
+    total_lap_times: int
+    unique_players: int
+    total_rigs: int
+    tracks_with_times: int
+    fastest_lap: dict = None
+
+class UpdateLapTimeRequest(BaseModel):
+    """
+    Model for updating lap time entry.
+    """
+    id: int = Field(..., description="ID of the lap time entry")
+    player_name: str = Field(..., description="Player name")
+    lap_time: str = Field(..., description="Lap time in MM:SS.mmm format")
+    track_name: str = Field(..., description="Track name")
+
 # Create FastAPI application
 app = FastAPI(
     title="F1 Leaderboard API",
@@ -190,6 +228,16 @@ async def admin(request: Request):
     Admin endpoint that returns the admin panel HTML page.
     """
     return templates.TemplateResponse("admin.html", {
+        "request": request,
+        "f1_tracks": F1_2024_TRACKS
+    })
+
+@app.get("/database", response_class=HTMLResponse, tags=["UI"])
+async def database(request: Request):
+    """
+    Database management endpoint that returns the database management HTML page.
+    """
+    return templates.TemplateResponse("database.html", {
         "request": request,
         "f1_tracks": F1_2024_TRACKS
     })
@@ -870,6 +918,109 @@ def format_lap_time(milliseconds):
     milliseconds = int((total_seconds - int(total_seconds)) * 1000)
     
     return f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+
+# ===== DATABASE MANAGEMENT API ENDPOINTS =====
+
+@app.get("/api/database/lap_times", response_model=List[LapTimeEntry], tags=["Database"])
+async def get_all_lap_times():
+    """
+    Get all lap times with detailed information for database management.
+    
+    Returns:
+        list: List of all lap times with full details
+    """
+    try:
+        lap_times = get_all_lap_times_detailed()
+        return lap_times
+    except Exception as e:
+        logger.error(f"Error retrieving detailed lap times: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/database/stats", response_model=DatabaseStats, tags=["Database"])
+async def get_db_stats():
+    """
+    Get database statistics for overview.
+    
+    Returns:
+        dict: Database statistics
+    """
+    try:
+        stats = get_database_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error retrieving database stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/database/lap_times/{lap_time_id}", tags=["Database"])
+async def update_lap_time(lap_time_id: int, update_data: UpdateLapTimeRequest):
+    """
+    Update an existing lap time entry.
+    
+    Args:
+        lap_time_id: ID of the lap time entry
+        update_data: Updated lap time data
+        
+    Returns:
+        dict: Success message or error
+    """
+    try:
+        # Parse lap time string to milliseconds
+        lap_time_ms = parse_lap_time_to_ms(update_data.lap_time)
+        if lap_time_ms is None:
+            raise HTTPException(status_code=400, detail=f"Invalid lap time format: {update_data.lap_time}")
+        
+        # Validate track name
+        if update_data.track_name not in F1_2024_TRACKS:
+            raise HTTPException(status_code=400, detail=f"Invalid track name: {update_data.track_name}")
+        
+        success = update_lap_time_entry(
+            lap_time_id,
+            update_data.player_name,
+            lap_time_ms,
+            update_data.track_name
+        )
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Lap time entry not found: {lap_time_id}")
+        
+        return {
+            "success": True,
+            "message": f"Lap time entry updated successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating lap time entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/database/lap_times/{lap_time_id}", tags=["Database"])
+async def delete_lap_time(lap_time_id: int):
+    """
+    Delete a lap time entry.
+    
+    Args:
+        lap_time_id: ID of the lap time entry to delete
+        
+    Returns:
+        dict: Success message or error
+    """
+    try:
+        success = delete_lap_time_entry(lap_time_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Lap time entry not found: {lap_time_id}")
+        
+        return {
+            "success": True,
+            "message": f"Lap time entry deleted successfully"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting lap time entry: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     # The API_HOST is now set correctly by app_config.py at import time

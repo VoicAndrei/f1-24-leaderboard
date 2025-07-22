@@ -387,4 +387,255 @@ def get_all_tracks():
         return results
     
     finally:
-        conn.close() 
+        conn.close()
+
+
+# Database Management Functions
+
+def get_all_lap_times_detailed():
+    """
+    Get all lap times with detailed information for database management.
+    
+    Returns:
+        list: List of all lap times with full details
+    """
+    conn = get_db_connection()
+    
+    try:
+        cursor = conn.execute(
+            """
+            SELECT 
+                lt.id,
+                lt.lap_time_ms,
+                lt.timestamp,
+                lt.player_name_on_lap,
+                r.rig_identifier,
+                r.phone_number,
+                r.email,
+                t.name as track_name
+            FROM lap_times lt
+            JOIN rigs r ON lt.rig_id = r.id
+            JOIN tracks t ON lt.track_id = t.id
+            ORDER BY lt.timestamp DESC
+            """
+        )
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'id': row['id'],
+                'lap_time_ms': row['lap_time_ms'],
+                'lap_time_formatted': format_lap_time_db(row['lap_time_ms']),
+                'timestamp': row['timestamp'],
+                'player_name': row['player_name_on_lap'],
+                'rig_identifier': row['rig_identifier'],
+                'phone_number': row['phone_number'] or '',
+                'email': row['email'] or '',
+                'track_name': row['track_name']
+            })
+        
+        return results
+    
+    finally:
+        conn.close()
+
+
+def get_database_stats():
+    """
+    Get database statistics for overview.
+    
+    Returns:
+        dict: Database statistics
+    """
+    conn = get_db_connection()
+    
+    try:
+        stats = {}
+        
+        # Count total lap times
+        cursor = conn.execute("SELECT COUNT(*) as count FROM lap_times")
+        stats['total_lap_times'] = cursor.fetchone()['count']
+        
+        # Count unique players
+        cursor = conn.execute("SELECT COUNT(DISTINCT player_name_on_lap) as count FROM lap_times")
+        stats['unique_players'] = cursor.fetchone()['count']
+        
+        # Count total rigs
+        cursor = conn.execute("SELECT COUNT(*) as count FROM rigs")
+        stats['total_rigs'] = cursor.fetchone()['count']
+        
+        # Count tracks with lap times
+        cursor = conn.execute(
+            "SELECT COUNT(DISTINCT track_id) as count FROM lap_times"
+        )
+        stats['tracks_with_times'] = cursor.fetchone()['count']
+        
+        # Get fastest lap overall
+        cursor = conn.execute(
+            """
+            SELECT lt.lap_time_ms, lt.player_name_on_lap, t.name as track_name
+            FROM lap_times lt
+            JOIN tracks t ON lt.track_id = t.id
+            ORDER BY lt.lap_time_ms ASC
+            LIMIT 1
+            """
+        )
+        fastest = cursor.fetchone()
+        if fastest:
+            stats['fastest_lap'] = {
+                'time_ms': fastest['lap_time_ms'],
+                'time_formatted': format_lap_time_db(fastest['lap_time_ms']),
+                'player': fastest['player_name_on_lap'],
+                'track': fastest['track_name']
+            }
+        else:
+            stats['fastest_lap'] = None
+            
+        return stats
+    
+    finally:
+        conn.close()
+
+
+def update_lap_time_entry(lap_time_id, player_name, lap_time_ms, track_name):
+    """
+    Update an existing lap time entry.
+    
+    Args:
+        lap_time_id (int): ID of the lap time entry
+        player_name (str): New player name
+        lap_time_ms (int): New lap time in milliseconds
+        track_name (str): New track name
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    conn = get_db_connection()
+    
+    try:
+        # Get track ID
+        track_id = get_track_id(track_name)
+        if not track_id:
+            logger.error(f"Track not found: {track_name}")
+            return False
+        
+        # Update the lap time entry
+        conn.execute(
+            """
+            UPDATE lap_times 
+            SET player_name_on_lap = ?, lap_time_ms = ?, track_id = ?
+            WHERE id = ?
+            """,
+            (player_name, lap_time_ms, track_id, lap_time_id)
+        )
+        
+        if conn.total_changes == 0:
+            logger.error(f"No lap time found with ID: {lap_time_id}")
+            return False
+        
+        conn.commit()
+        logger.info(f"Updated lap time entry ID {lap_time_id}: {player_name} - {track_name} - {lap_time_ms}ms")
+        return True
+    
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error updating lap time entry: {e}")
+        return False
+    
+    finally:
+        conn.close()
+
+
+def delete_lap_time_entry(lap_time_id):
+    """
+    Delete a lap time entry.
+    
+    Args:
+        lap_time_id (int): ID of the lap time entry to delete
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    conn = get_db_connection()
+    
+    try:
+        # Delete the lap time entry
+        conn.execute("DELETE FROM lap_times WHERE id = ?", (lap_time_id,))
+        
+        if conn.total_changes == 0:
+            logger.error(f"No lap time found with ID: {lap_time_id}")
+            return False
+        
+        conn.commit()
+        logger.info(f"Deleted lap time entry ID {lap_time_id}")
+        return True
+    
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error deleting lap time entry: {e}")
+        return False
+    
+    finally:
+        conn.close()
+
+
+def format_lap_time_db(milliseconds):
+    """
+    Format lap time from milliseconds to MM:SS.mmm for database management.
+    
+    Args:
+        milliseconds (int): Lap time in milliseconds
+        
+    Returns:
+        str: Formatted lap time as MM:SS.mmm
+    """
+    if milliseconds == 0 or milliseconds is None:
+        return "00:00.000"
+    
+    total_seconds = milliseconds / 1000
+    minutes = int(total_seconds // 60)
+    seconds = int(total_seconds % 60)
+    milliseconds_part = int((total_seconds - int(total_seconds)) * 1000)
+    
+    return f"{minutes:02d}:{seconds:02d}.{milliseconds_part:03d}"
+
+
+def parse_lap_time_to_ms(time_string):
+    """
+    Parse lap time string (MM:SS.mmm) to milliseconds.
+    
+    Args:
+        time_string (str): Time in format MM:SS.mmm
+        
+    Returns:
+        int: Time in milliseconds, or None if invalid format
+    """
+    try:
+        # Handle different possible formats
+        time_string = time_string.strip()
+        
+        # Split by colon
+        if ':' not in time_string:
+            return None
+            
+        minutes_part, seconds_part = time_string.split(':', 1)
+        minutes = int(minutes_part)
+        
+        # Handle seconds and milliseconds
+        if '.' in seconds_part:
+            seconds_str, ms_str = seconds_part.split('.', 1)
+            seconds = int(seconds_str)
+            # Pad or truncate milliseconds to 3 digits
+            ms_str = ms_str.ljust(3, '0')[:3]
+            milliseconds_part = int(ms_str)
+        else:
+            seconds = int(seconds_part)
+            milliseconds_part = 0
+        
+        # Convert to total milliseconds
+        total_ms = (minutes * 60 * 1000) + (seconds * 1000) + milliseconds_part
+        return total_ms
+        
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error parsing lap time '{time_string}': {e}")
+        return None
