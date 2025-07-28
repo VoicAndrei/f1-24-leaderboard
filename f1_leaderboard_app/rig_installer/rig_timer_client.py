@@ -292,13 +292,33 @@ def show_company_overlay():
     main_frame.pack(expand=True, fill='both')
     
     # Company logo/name
-    logo_label = tk.Label(
-        main_frame,
-        text="LANDGAME",
-        font=("Arial", 72, "bold"),
-        fg='#00ff00',  # Green color
-        bg='#1a1a1a'
-    )
+    try:
+        # Load the logo image
+        from PIL import Image, ImageTk
+        import os
+        logo_path = os.path.join(os.path.dirname(__file__), "../backend/static/images/Logo + Slogan Gri.png")
+        logo_image = Image.open(logo_path)
+        logo_image = logo_image.resize((400, 200))  # Adjust size as needed
+        logo_photo = ImageTk.PhotoImage(logo_image)
+        
+        logo_label = tk.Label(
+            main_frame,
+            image=logo_photo,
+            bg='#1a1a1a'
+        )
+        logo_label.image = logo_photo  # Keep a reference
+        
+    except Exception as e:
+        logger.warning(f"Could not load logo image: {e}")
+        # Fallback to text
+        logo_label = tk.Label(
+            main_frame,
+            text="LANDGAME",
+            font=("Arial", 72, "bold"),
+            fg='#00ff00',  # Green color
+            bg='#1a1a1a'
+        )
+    
     logo_label.pack(expand=True)
     
     # Session complete message
