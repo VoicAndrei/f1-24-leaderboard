@@ -309,9 +309,10 @@ footer {
 
 .body-leaderboard-rotated #qr-cta {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 16px;
-    padding: 10px 14px;
+    gap: 14px;
+    padding: 18px 14px;
     background-color: #1e1e1e;
     border-top: 2px solid #e10600;
     border-bottom: 1px solid #444;
@@ -319,30 +320,30 @@ footer {
 }
 
 .body-leaderboard-rotated #qr-image {
-    width: 130px;
-    height: 130px;
+    width: 360px;
+    height: 360px;
     background-color: #ffffff;
-    padding: 4px;
-    border-radius: 4px;
+    padding: 8px;
+    border-radius: 6px;
     flex-shrink: 0;
 }
 
 .body-leaderboard-rotated #qr-text {
-    flex: 1;
-    text-align: left;
+    text-align: center;
     color: #ffffff;
+    max-width: 90%;
 }
 
 .body-leaderboard-rotated .qr-headline {
-    font-size: 1.25rem;
+    font-size: 1.7rem;
     font-weight: 700;
     color: #ffffff;
-    margin: 0 0 4px 0;
+    margin: 0 0 6px 0;
     line-height: 1.25;
 }
 
 .body-leaderboard-rotated .qr-sub {
-    font-size: 1.05rem;
+    font-size: 1.45rem;
     color: #e10600;
     margin: 0;
     font-weight: 600;
