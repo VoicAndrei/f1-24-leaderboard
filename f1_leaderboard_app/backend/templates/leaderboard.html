@@ -12,7 +12,17 @@
             <img src="/static/images/Logo + Slogan Gri.svg" alt="Company Logo" id="header-logo">
             <h1>Leaderboard: <span id="track-name">Loading...</span></h1>
         </header>
-        
+
+        <section id="info-bar">
+            <div id="age-requirement">VÂRSTA MINIMĂ: <strong>12 ANI</strong></div>
+            <div id="rig-status">
+                <span class="rig-status-label">SIMULATOARE</span>
+                <ul id="rig-status-list">
+                    <li class="rig-status-loading">Se încarcă...</li>
+                </ul>
+            </div>
+        </section>
+
         <main>
             <table id="leaderboard-table">
                 <thead>
@@ -27,12 +37,19 @@
                 </tbody>
             </table>
         </main>
-        
+
         <footer>
-            <p>Landgame &copy; 2025</p>
+            <div id="qr-cta">
+                <img src="/static/images/qr-instagram.png" alt="Instagram QR" id="qr-image">
+                <div id="qr-text">
+                    <p class="qr-headline">Scanează codul, dă-ne like pe Instagram</p>
+                    <p class="qr-sub">și urcă-te la simulator pentru 10 minute de adrenalină!</p>
+                </div>
+            </div>
+            <p class="copyright">Landgame &copy; 2025</p>
         </footer>
     </div>
 
     <script src="/static/js/leaderboard.js"></script>
 </body>
-</html> 
+</html>
