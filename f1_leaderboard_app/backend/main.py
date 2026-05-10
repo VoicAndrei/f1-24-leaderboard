@@ -156,7 +156,7 @@ class DatabaseStats(BaseModel):
     unique_players: int
     total_rigs: int
     tracks_with_times: int
-    fastest_lap: dict = None
+    fastest_lap: Optional[dict] = None
 
 class UpdateLapTimeRequest(BaseModel):
     """
@@ -648,7 +648,7 @@ async def get_all_timer_status():
     # It's better to get rig assignments from DB to ensure we cover all configured rigs
     try:
         rig_assignments = get_rig_assignments() 
-        all_rig_ids = [rig.rig_identifier for rig in rig_assignments]
+        all_rig_ids = [rig['rig_identifier'] for rig in rig_assignments]
     except Exception as e:
         logger.error(f"Could not fetch rig assignments for timer status: {e}. Falling back to timer_states keys.")
         all_rig_ids = list(rig_timer_states.keys())
