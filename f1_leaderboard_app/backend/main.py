@@ -220,15 +220,14 @@ async def root(request: Request):
     """
     Root endpoint that returns the leaderboard HTML page.
     """
-    return templates.TemplateResponse("leaderboard.html", {"request": request})
+    return templates.TemplateResponse(request, "leaderboard.html")
 
 @app.get("/admin", response_class=HTMLResponse, tags=["UI"])
 async def admin(request: Request):
     """
     Admin endpoint that returns the admin panel HTML page.
     """
-    return templates.TemplateResponse("admin.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "admin.html", {
         "f1_tracks": F1_2024_TRACKS
     })
 
@@ -237,8 +236,7 @@ async def database(request: Request):
     """
     Database management endpoint that returns the database management HTML page.
     """
-    return templates.TemplateResponse("database.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "database.html", {
         "f1_tracks": F1_2024_TRACKS
     })
 
