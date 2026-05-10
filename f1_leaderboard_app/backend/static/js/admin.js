@@ -127,8 +127,8 @@ function createTimerControlHtml(rigId, timerStatus) {
     } else {
         return `
             <div class="timer-controls">
-                <input type="number" class="timer-input" id="timer-input-${rigId}" 
-                       placeholder="10" min="1" step="1" value="10">
+                <input type="number" class="timer-input" id="timer-input-${rigId}"
+                       placeholder="6" min="1" step="1" value="6">
                 <span style="font-size: 0.9rem;">min</span>
                 <button class="timer-button" onclick="startTimer('${rigId}')">Start</button>
                 <span class="timer-status timer-inactive">Inactive</span>
