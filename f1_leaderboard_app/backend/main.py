@@ -341,7 +341,7 @@ async def get_current_leaderboard_data():
         official_track_name = get_current_leaderboard_track()
         
         # Get the leaderboard data for the track using the official name
-        leaderboard_data = get_top_lap_times(official_track_name)
+        leaderboard_data = get_top_lap_times(official_track_name, 35)
 
         # Get the simplified display name for the frontend
         display_track_name = F1_TRACK_DISPLAY_NAMES.get(official_track_name, official_track_name)
