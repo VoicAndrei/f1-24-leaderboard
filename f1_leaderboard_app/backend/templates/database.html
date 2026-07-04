@@ -240,7 +240,27 @@
             <!-- Lap Times Management Section -->
             <section class="db-section">
                 <h2>Lap Times Management</h2>
-                
+
+                <button class="save-btn" id="show-add-form"
+                        style="padding: 0.5rem 1rem; border: none; border-radius: 3px; cursor: pointer; margin-bottom: 1rem;">
+                    ➕ Add Lap Time
+                </button>
+
+                <!-- Add Form (initially hidden) -->
+                <div class="edit-form" id="add-form">
+                    <h3>Add New Lap Time</h3>
+                    <input type="text" id="add-player" placeholder="Player Name" required>
+                    <input type="text" id="add-time" placeholder="Lap Time (MM:SS.mmm)" required>
+                    <select id="add-track" required>
+                        <option value="">Select track...</option>
+                        <!-- Track options will be populated by JavaScript -->
+                    </select>
+                    <div class="form-buttons">
+                        <button class="save-btn" id="save-add">Add Time</button>
+                        <button class="cancel-btn" id="cancel-add">Cancel</button>
+                    </div>
+                </div>
+
                 <div class="search-filter">
                     <input type="text" id="search-player" placeholder="Search by player name...">
                     <select id="filter-track">

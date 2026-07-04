@@ -167,6 +167,14 @@ class UpdateLapTimeRequest(BaseModel):
     lap_time: str = Field(..., description="Lap time in MM:SS.mmm format")
     track_name: str = Field(..., description="Track name")
 
+class CreateLapTimeRequest(BaseModel):
+    """
+    Model for manually adding a lap time entry via the database page.
+    """
+    player_name: str = Field(..., description="Player name")
+    lap_time: str = Field(..., description="Lap time in MM:SS.mmm format")
+    track_name: str = Field(..., description="Track name")
+
 # Create FastAPI application
 app = FastAPI(
     title="F1 Leaderboard API",
@@ -932,6 +940,59 @@ async def get_all_lap_times():
         return lap_times
     except Exception as e:
         logger.error(f"Error retrieving detailed lap times: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Rig that manually-added lap times are attributed to. Manual entries (e.g.
+# promo/seed times) aren't tied to a real session, so they all use RIG1.
+MANUAL_ENTRY_RIG = "RIG1"
+
+@app.post("/api/database/lap_times", tags=["Database"])
+async def create_lap_time(create_data: CreateLapTimeRequest):
+    """
+    Manually add a new lap time entry from the database management page.
+
+    Unlike POST /api/laptime (which uses the rig's currently-assigned player),
+    this takes an explicit player name so arbitrary times can be seeded.
+
+    Args:
+        create_data: New lap time data (player, MM:SS.mmm time, track)
+
+    Returns:
+        dict: Success message or error
+    """
+    try:
+        # Parse lap time string to milliseconds
+        lap_time_ms = parse_lap_time_to_ms(create_data.lap_time)
+        if lap_time_ms is None:
+            raise HTTPException(status_code=400, detail=f"Invalid lap time format: {create_data.lap_time}")
+
+        # Validate track name
+        if create_data.track_name not in F1_2024_TRACKS:
+            raise HTTPException(status_code=400, detail=f"Invalid track name: {create_data.track_name}")
+
+        player_name = create_data.player_name.strip()
+        if not player_name:
+            raise HTTPException(status_code=400, detail="Player name is required")
+
+        success = add_lap_time(
+            MANUAL_ENTRY_RIG,
+            create_data.track_name,
+            player_name,
+            lap_time_ms
+        )
+
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to add lap time")
+
+        return {
+            "success": True,
+            "message": f"Lap time added for {player_name} on {create_data.track_name}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating lap time entry: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/database/stats", response_model=DatabaseStats, tags=["Database"])

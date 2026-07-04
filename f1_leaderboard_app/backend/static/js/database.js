@@ -43,6 +43,11 @@ function setupEventListeners() {
     // Edit form buttons
     document.getElementById('save-edit').addEventListener('click', saveEdit);
     document.getElementById('cancel-edit').addEventListener('click', cancelEdit);
+
+    // Add form buttons
+    document.getElementById('show-add-form').addEventListener('click', showAddForm);
+    document.getElementById('save-add').addEventListener('click', submitAdd);
+    document.getElementById('cancel-add').addEventListener('click', hideAddForm);
 }
 
 // Fetch database statistics
@@ -168,22 +173,29 @@ function getContactInfo(entry) {
 function populateTrackDropdowns() {
     const filterTrackSelect = document.getElementById('filter-track');
     const editTrackSelect = document.getElementById('edit-track');
-    
+    const addTrackSelect = document.getElementById('add-track');
+
     // Clear existing options (except default)
     filterTrackSelect.innerHTML = '<option value="">All tracks</option>';
     editTrackSelect.innerHTML = '<option value="">Select track...</option>';
-    
+    addTrackSelect.innerHTML = '<option value="">Select track...</option>';
+
     // Add track options
     F1_TRACKS_LIST.forEach(track => {
         const filterOption = document.createElement('option');
         filterOption.value = track;
         filterOption.textContent = track;
         filterTrackSelect.appendChild(filterOption);
-        
+
         const editOption = document.createElement('option');
         editOption.value = track;
         editOption.textContent = track;
         editTrackSelect.appendChild(editOption);
+
+        const addOption = document.createElement('option');
+        addOption.value = track;
+        addOption.textContent = track;
+        addTrackSelect.appendChild(addOption);
     });
 }
 
@@ -233,11 +245,84 @@ function clearFilters() {
     displayLapTimes(filteredLapTimes);
 }
 
+// Show add form
+function showAddForm() {
+    // Close the edit form if it's open so only one form shows at a time
+    cancelEdit();
+    document.getElementById('add-form').style.display = 'block';
+    document.getElementById('add-player').focus();
+    document.getElementById('add-form').scrollIntoView({ behavior: 'smooth' });
+}
+
+// Hide and clear the add form
+function hideAddForm() {
+    document.getElementById('add-form').style.display = 'none';
+    document.getElementById('add-player').value = '';
+    document.getElementById('add-time').value = '';
+    document.getElementById('add-track').value = '';
+}
+
+// Submit a new lap time
+async function submitAdd() {
+    const playerName = document.getElementById('add-player').value.trim();
+    const lapTime = document.getElementById('add-time').value.trim();
+    const trackName = document.getElementById('add-track').value;
+
+    // Validation (mirrors the edit form)
+    if (!playerName) {
+        showMessage('Please enter a player name.', false);
+        return;
+    }
+    if (!lapTime) {
+        showMessage('Please enter a lap time.', false);
+        return;
+    }
+    if (!trackName) {
+        showMessage('Please select a track.', false);
+        return;
+    }
+    if (!isValidLapTimeFormat(lapTime)) {
+        showMessage('Please enter lap time in format MM:SS.mmm (e.g., 01:23.456)', false);
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/database/lap_times', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                player_name: playerName,
+                lap_time: lapTime,
+                track_name: trackName
+            })
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showMessage(result.message || 'Lap time added successfully!', true);
+            hideAddForm();
+            fetchLapTimes();      // Refresh table
+            fetchDatabaseStats(); // Update stats
+        } else {
+            showMessage('Error: ' + (result.detail || 'Failed to add lap time'), false);
+        }
+    } catch (error) {
+        console.error('Error adding lap time:', error);
+        showMessage('Error: ' + error.message, false);
+    }
+}
+
 // Start editing an entry
 function startEdit(entryId) {
     const entry = allLapTimes.find(e => e.id === entryId);
     if (!entry) return;
-    
+
+    // Close the add form if it's open so only one form shows at a time
+    hideAddForm();
+
     editingEntry = entry;
     
     // Populate edit form
